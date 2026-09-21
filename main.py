@@ -26,12 +26,31 @@ for node_id, data in G.nodes(data=True):
 edges = []
 
 for u, v, key, data in G.edges(keys=True, data=True):
+    geometry = data.get("geometry")
+
+    if geometry is not None:
+        coordinates = list(geometry.coords)
+    else:
+        coordinates = [
+            (G.nodes[u]["x"], G.nodes[u]["y"]),
+            (G.nodes[v]["x"], G.nodes[v]["y"])
+        ]
+
+    # Garante que a geometria siga a direção da aresta (u -> v).
+    start = (G.nodes[u]["x"], G.nodes[u]["y"])
+    first_distance = (coordinates[0][0] - start[0]) ** 2 + (coordinates[0][1] - start[1]) ** 2
+    last_distance = (coordinates[-1][0] - start[0]) ** 2 + (coordinates[-1][1] - start[1]) ** 2
+
+    if last_distance < first_distance:
+        coordinates.reverse()
+
     edges.append({
         "from": u,
         "to": v,
         "distance_m": data.get("length"),
         "road_name": data.get("name"),
-        "max_speed": data.get("maxspeed")
+        "max_speed": data.get("maxspeed"),
+        "geometry": [[latitude, longitude] for longitude, latitude in coordinates]
     })
 
 graph = {
@@ -40,7 +59,7 @@ graph = {
     "edges": edges
 }
 
-with open("cidade.json", "w", encoding="utf-8") as file:
+with open("Inhumas.json", "w", encoding="utf-8") as file:
     json.dump(
         graph,
         file,
@@ -48,4 +67,4 @@ with open("cidade.json", "w", encoding="utf-8") as file:
         indent=2
     )
 
-print("Grafo salvo em: cidade.json")
+print("Grafo salvo em: Inhumas.json")
