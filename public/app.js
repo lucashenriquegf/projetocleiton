@@ -2,9 +2,9 @@ import {
   assembleMultiStopRoute,
   buildRoutingGraph,
   buildPathResult,
-  calculateMultiStopRoute,
   findNearestNode,
 } from "/algorithms/routing.mjs";
+import { aStar } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
 
 const state = {
@@ -365,9 +365,7 @@ async function calculateRoute() {
   let result;
 
   try {
-    result = algorithm === "bfs"
-      ? await calculateBfsRoute()
-      : calculateMultiStopRoute(state.routingGraph, state.stops, algorithm);
+    result = await calculateSelectedAlgorithmRoute(algorithm);
   } catch (error) {
     console.error(error);
     showToast("Ocorreu um erro durante o cálculo.", true);
@@ -397,17 +395,19 @@ async function calculateRoute() {
   showToast("Rota calculada.");
 }
 
-async function calculateBfsRoute() {
+async function calculateSelectedAlgorithmRoute(algorithm) {
   const pathResults = [];
 
   for (let index = 0; index < state.stops.length - 1; index += 1) {
-    const nodeIds = await bfs({
+    const parameters = {
       grafo: state.graph,
       inicio: state.stops[index].nodeId,
       destino: state.stops[index + 1].nodeId,
-      markers: new Map(),
-      velocidade: 0,
-    });
+    };
+    const nodeIds = algorithm === "bfs"
+      ? await bfs({ ...parameters, markers: new Map(), velocidade: 0 })
+      : aStar(parameters);
+
     pathResults.push(buildPathResult(state.routingGraph, nodeIds));
   }
 
@@ -501,10 +501,8 @@ function formatComputationTime(milliseconds) {
 
 function getAlgorithmLabel(value) {
   return {
-    dijkstra: "Dijkstra",
     astar: "A*",
     bfs: "BFS",
-    dfs: "DFS",
   }[value] || value;
 }
 
