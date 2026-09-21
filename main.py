@@ -11,6 +11,32 @@ G = ox.graph.graph_from_place(
     network_type="drive"
 )
 
+# O OpenStreetMap nem sempre informa maxspeed. Nesses casos, o OSMnx usa
+# velocidades típicas por categoria viária para estimar o tempo em fluxo livre.
+velocidades_por_via = {
+    "motorway": 100,
+    "motorway_link": 60,
+    "trunk": 80,
+    "trunk_link": 50,
+    "primary": 60,
+    "primary_link": 40,
+    "secondary": 50,
+    "secondary_link": 35,
+    "tertiary": 40,
+    "tertiary_link": 30,
+    "residential": 30,
+    "unclassified": 30,
+    "service": 20,
+    "living_street": 10,
+}
+
+G = ox.routing.add_edge_speeds(
+    G,
+    hwy_speeds=velocidades_por_via,
+    fallback=40,
+)
+G = ox.routing.add_edge_travel_times(G)
+
 print(f"Nós encontrados: {len(G.nodes)}")
 print(f"Arestas encontradas: {len(G.edges)}")
 
@@ -50,6 +76,9 @@ for u, v, key, data in G.edges(keys=True, data=True):
         "distance_m": data.get("length"),
         "road_name": data.get("name"),
         "max_speed": data.get("maxspeed"),
+        "road_type": data.get("highway"),
+        "speed_kph": data.get("speed_kph"),
+        "travel_time_s": data.get("travel_time"),
         "geometry": [[latitude, longitude] for longitude, latitude in coordinates]
     })
 

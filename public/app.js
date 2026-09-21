@@ -2,7 +2,9 @@ import {
   assembleMultiStopRoute,
   buildRoutingGraph,
   buildPathResult,
-  findNearestNode,
+  connectStopsToGraph,
+  findNearestEdge,
+  optimizeStopOrder,
 } from "/algorithms/routing.mjs";
 import { aStar } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
@@ -19,6 +21,7 @@ const state = {
   counters: { pickup: 0, delivery: 0 },
   toastTimer: null,
   lastRoute: null,
+  editingStopId: null,
 };
 
 const elements = {
@@ -48,6 +51,16 @@ const elements = {
   cancelAdd: document.querySelector("#cancel-add"),
   dropOverlay: document.querySelector("#drop-overlay"),
   toast: document.querySelector("#toast"),
+  deliveryDialog: document.querySelector("#delivery-dialog"),
+  deliveryForm: document.querySelector("#delivery-form"),
+  deliveryDialogTitle: document.querySelector("#delivery-dialog-title"),
+  stopDialogDescription: document.querySelector("#stop-dialog-description"),
+  deadlineField: document.querySelector("#deadline-field"),
+  deliveryDeadline: document.querySelector("#delivery-deadline"),
+  productsEditor: document.querySelector("#products-editor"),
+  addProduct: document.querySelector("#add-product"),
+  closeDeliveryDialog: document.querySelector("#close-delivery-dialog"),
+  cancelDelivery: document.querySelector("#cancel-delivery"),
 };
 
 async function initialize() {
@@ -59,7 +72,9 @@ async function initialize() {
     if (!response.ok) throw new Error("Não foi possível carregar a rede viária.");
 
     state.graph = await response.json();
-    state.routingGraph = buildRoutingGraph(state.graph);
+    state.routingGraph = buildRoutingGraph(state.graph, {
+      fallbackSpeedKph: Number(elements.averageSpeed.value),
+    });
     elements.cityName.textContent = state.graph.city.replace(", Brazil", "");
 
     const bounds = L.latLngBounds(
@@ -135,11 +150,16 @@ function bindInterfaceEvents() {
   elements.algorithm.addEventListener("change", invalidateRoute);
   elements.averageSpeed.addEventListener("input", () => {
     elements.speedValue.textContent = elements.averageSpeed.value;
-    if (state.lastRoute) {
-      renderRouteSummary(state.lastRoute, false);
-    }
+    invalidateRoute();
   });
   elements.networkToggle.addEventListener("change", toggleNetworkLayer);
+  elements.addProduct.addEventListener("click", () => addProductEditorRow());
+  elements.deliveryForm.addEventListener("submit", saveStopDetails);
+  elements.closeDeliveryDialog.addEventListener("click", closeStopEditor);
+  elements.cancelDelivery.addEventListener("click", closeStopEditor);
+  elements.deliveryDialog.addEventListener("close", () => {
+    state.editingStopId = null;
+  });
 }
 
 function isStopDrag(event) {
@@ -168,8 +188,8 @@ function setAddMode(type) {
 }
 
 function addStop(type, latlng) {
-  const node = findNearestNode(state.routingGraph, latlng.lat, latlng.lng);
-  if (!node) {
+  const edge = findNearestEdge(state.routingGraph, latlng.lat, latlng.lng);
+  if (!edge) {
     showToast("Não foi encontrada uma rua próxima a esse local.", true);
     return;
   }
@@ -180,11 +200,13 @@ function addStop(type, latlng) {
     id: `${type}-${Date.now()}-${state.counters[type]}`,
     type,
     name: `${typeName} ${state.counters[type]}`,
-    roadName: getRoadName(node.id),
-    nodeId: node.id,
-    latitude: node.latitude,
-    longitude: node.longitude,
+    roadName: edge.roadName || "Via local sem nome",
+    edgeIndex: edge.edgeIndex,
+    latitude: edge.latitude,
+    longitude: edge.longitude,
     marker: null,
+    deadline: type === "delivery" ? "" : null,
+    products: [],
   };
 
   stop.marker = createStopMarker(stop);
@@ -192,6 +214,8 @@ function addStop(type, latlng) {
   invalidateRoute();
   renderStops();
   showToast(`${stop.name} conectada à rede viária.`);
+
+  openStopEditor(stop.id);
 }
 
 function createStopMarker(stop) {
@@ -205,14 +229,14 @@ function createStopMarker(stop) {
   marker.bindPopup(createPopupContent(stop));
   marker.on("dragend", () => {
     const position = marker.getLatLng();
-    const nearestNode = findNearestNode(state.routingGraph, position.lat, position.lng);
-    if (!nearestNode) return;
+    const nearestEdge = findNearestEdge(state.routingGraph, position.lat, position.lng);
+    if (!nearestEdge) return;
 
-    stop.nodeId = nearestNode.id;
-    stop.latitude = nearestNode.latitude;
-    stop.longitude = nearestNode.longitude;
-    stop.roadName = getRoadName(nearestNode.id);
-    marker.setLatLng([nearestNode.latitude, nearestNode.longitude]);
+    stop.edgeIndex = nearestEdge.edgeIndex;
+    stop.latitude = nearestEdge.latitude;
+    stop.longitude = nearestEdge.longitude;
+    stop.roadName = nearestEdge.roadName || "Via local sem nome";
+    marker.setLatLng([nearestEdge.latitude, nearestEdge.longitude]);
     marker.setPopupContent(createPopupContent(stop));
     invalidateRoute();
     renderStops();
@@ -234,12 +258,13 @@ function createStopIcon(stop, index) {
 
 function createPopupContent(stop) {
   const coordinates = `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}`;
-  return `<div class="stop-popup"><strong>${escapeHtml(stop.name)}</strong><span>${escapeHtml(stop.roadName)}</span><span>${coordinates}</span></div>`;
-}
-
-function getRoadName(nodeId) {
-  const names = [...(state.routingGraph.incidentRoadNames.get(nodeId) || [])];
-  return names[0] || "Via local sem nome";
+  const productDetails = isStopConfigured(stop)
+    ? `<span>${escapeHtml(summarizeProducts(stop.products))}</span>`
+    : "";
+  const deadlineDetails = stop.type === "delivery" && isStopConfigured(stop)
+    ? `<span>Prazo: ${escapeHtml(formatDeadline(stop.deadline))}</span>`
+    : "";
+  return `<div class="stop-popup"><strong>${escapeHtml(stop.name)}</strong><span>${escapeHtml(stop.roadName)}</span>${deadlineDetails}${productDetails}<span>${coordinates}</span></div>`;
 }
 
 function renderStops() {
@@ -249,9 +274,11 @@ function renderStops() {
   elements.clearRoute.disabled = state.stops.length === 0;
 
   const pickupCount = state.stops.filter((stop) => stop.type === "pickup").length;
-  const deliveryCount = state.stops.length - pickupCount;
-  elements.calculateRoute.disabled = pickupCount === 0 || deliveryCount === 0;
-  elements.calculationNote.textContent = getCalculationNote(pickupCount, deliveryCount);
+  const deliveries = state.stops.filter((stop) => stop.type === "delivery");
+  const deliveryCount = deliveries.length;
+  const incompleteStops = state.stops.filter((stop) => !isStopConfigured(stop)).length;
+  elements.calculateRoute.disabled = pickupCount === 0 || deliveryCount === 0 || incompleteStops > 0;
+  elements.calculationNote.textContent = getCalculationNote(pickupCount, deliveryCount, incompleteStops);
 
   elements.stopList.innerHTML = "";
   state.stops.forEach((stop, index) => {
@@ -260,66 +287,124 @@ function renderStops() {
 
     const item = document.createElement("li");
     item.className = `stop-item ${stop.type}`;
-    item.draggable = true;
     item.dataset.stopId = stop.id;
+    const configured = isStopConfigured(stop);
+    const stopDetails = configured
+      ? stop.type === "delivery"
+        ? `Prazo ${formatDeadline(stop.deadline)} · ${summarizeProducts(stop.products)}`
+        : summarizeProducts(stop.products)
+      : stop.type === "delivery"
+        ? "Informe o prazo e os produtos"
+        : "Informe os produtos da coleta";
     item.innerHTML = `
       <span class="stop-sequence">${index + 1}</span>
-      <span class="stop-copy"><strong>${escapeHtml(stop.name)}</strong><small>${escapeHtml(stop.roadName)}</small></span>
-      <button class="remove-stop" type="button" aria-label="Remover ${escapeHtml(stop.name)}">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
-      </button>`;
+      <span class="stop-copy"><strong>${escapeHtml(stop.name)}</strong><small class="${configured ? "" : "pending-details"}">${escapeHtml(stopDetails)}</small></span>
+      <span class="stop-actions">
+        <button class="edit-delivery" type="button" aria-label="Editar ${escapeHtml(stop.name)}">Detalhes</button>
+        <button class="remove-stop" type="button" aria-label="Remover ${escapeHtml(stop.name)}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </span>`;
 
     item.addEventListener("click", (event) => {
       if (event.target.closest("button")) return;
       state.map.flyTo([stop.latitude, stop.longitude], Math.max(state.map.getZoom(), 16));
       stop.marker.openPopup();
     });
+    item.querySelector(".edit-delivery").addEventListener("click", () => openStopEditor(stop.id));
     item.querySelector(".remove-stop").addEventListener("click", () => removeStop(stop.id));
-    bindStopReordering(item);
     elements.stopList.appendChild(item);
   });
 }
 
-function bindStopReordering(item) {
-  item.addEventListener("dragstart", (event) => {
-    event.stopPropagation();
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("application/x-cooproute-order", item.dataset.stopId);
-    requestAnimationFrame(() => item.classList.add("dragging"));
-  });
-  item.addEventListener("dragend", () => {
-    item.classList.remove("dragging");
-    document.querySelectorAll(".stop-item").forEach((row) => row.classList.remove("drag-over"));
-  });
-  item.addEventListener("dragover", (event) => {
-    if (![...(event.dataTransfer?.types || [])].includes("application/x-cooproute-order")) return;
-    event.preventDefault();
-    event.stopPropagation();
-    item.classList.add("drag-over");
-  });
-  item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
-  item.addEventListener("drop", (event) => {
-    const draggedId = event.dataTransfer.getData("application/x-cooproute-order");
-    if (!draggedId) return;
-    event.preventDefault();
-    event.stopPropagation();
-    item.classList.remove("drag-over");
-
-    const fromIndex = state.stops.findIndex((stop) => stop.id === draggedId);
-    const toIndex = state.stops.findIndex((stop) => stop.id === item.dataset.stopId);
-    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return;
-    const [movedStop] = state.stops.splice(fromIndex, 1);
-    state.stops.splice(toIndex, 0, movedStop);
-    invalidateRoute();
-    renderStops();
-  });
-}
-
-function getCalculationNote(pickups, deliveries) {
+function getCalculationNote(pickups, deliveries, incompleteStops = 0) {
   if (!pickups && !deliveries) return "Adicione os pontos para começar";
   if (!pickups) return "Adicione ao menos um ponto de coleta";
   if (!deliveries) return "Adicione ao menos um ponto de entrega";
+  if (incompleteStops) {
+    return `Preencha os dados de ${incompleteStops} ${pluralize(incompleteStops, "ponto", "pontos")}`;
+  }
   return `${pickups} ${pluralize(pickups, "coleta", "coletas")} • ${deliveries} ${pluralize(deliveries, "entrega", "entregas")}`;
+}
+
+function openStopEditor(stopId) {
+  const stop = state.stops.find((candidate) => candidate.id === stopId);
+  if (!stop) return;
+
+  state.editingStopId = stop.id;
+  elements.deliveryDialogTitle.textContent = stop.name;
+  elements.stopDialogDescription.textContent = stop.type === "delivery"
+    ? "Informe o prazo e os produtos deste ponto."
+    : "Informe os produtos e quantidades desta coleta.";
+  elements.deadlineField.hidden = stop.type !== "delivery";
+  elements.deliveryDeadline.required = stop.type === "delivery";
+  elements.deliveryDeadline.value = stop.deadline || "";
+  elements.productsEditor.innerHTML = "";
+  (stop.products?.length ? stop.products : [{ name: "", quantity: 1 }])
+    .forEach((product) => addProductEditorRow(product));
+  elements.deliveryDialog.showModal();
+}
+
+function closeStopEditor() {
+  if (elements.deliveryDialog.open) elements.deliveryDialog.close();
+  state.editingStopId = null;
+}
+
+function addProductEditorRow(product = { name: "", quantity: 1 }) {
+  const row = document.createElement("div");
+  row.className = "product-row";
+  row.innerHTML = `
+    <input class="product-name" type="text" value="${escapeHtml(product.name || "")}" placeholder="Produto" aria-label="Produto" required />
+    <input class="product-quantity" type="number" value="${Number(product.quantity) || 1}" min="0.01" step="0.01" aria-label="Quantidade" required />
+    <button class="remove-product" type="button" aria-label="Remover produto">×</button>`;
+  row.querySelector(".remove-product").addEventListener("click", () => {
+    if (elements.productsEditor.children.length === 1) {
+      row.querySelector(".product-name").value = "";
+      row.querySelector(".product-quantity").value = "1";
+      return;
+    }
+    row.remove();
+  });
+  elements.productsEditor.appendChild(row);
+}
+
+function saveStopDetails(event) {
+  event.preventDefault();
+  const stop = state.stops.find((candidate) => candidate.id === state.editingStopId);
+  if (!stop) return;
+
+  const products = [...elements.productsEditor.querySelectorAll(".product-row")].map((row) => ({
+    name: row.querySelector(".product-name").value.trim(),
+    quantity: Number(row.querySelector(".product-quantity").value),
+  }));
+
+  const missingDeadline = stop.type === "delivery" && !elements.deliveryDeadline.value;
+  if (missingDeadline || products.some((product) => !product.name || !(product.quantity > 0))) {
+    showToast(
+      stop.type === "delivery"
+        ? "Informe o prazo, os produtos e quantidades válidas."
+        : "Informe os produtos e quantidades válidas.",
+      true,
+    );
+    return;
+  }
+
+  stop.deadline = stop.type === "delivery" ? elements.deliveryDeadline.value : null;
+  stop.products = products;
+  stop.marker.setPopupContent(createPopupContent(stop));
+  invalidateRoute();
+  closeStopEditor();
+  renderStops();
+  showToast(`${stop.name} atualizada.`);
+}
+
+function isStopConfigured(stop) {
+  const validProducts = Array.isArray(stop.products) &&
+    stop.products.length > 0 &&
+    stop.products.every((product) => product.name?.trim() && Number(product.quantity) > 0);
+  return validProducts && (
+    stop.type === "pickup" || Number.isFinite(Date.parse(stop.deadline))
+  );
 }
 
 function removeStop(stopId) {
@@ -354,6 +439,12 @@ async function calculateRoute() {
     showToast("Adicione ao menos uma coleta e uma entrega.", true);
     return;
   }
+  const incompleteStop = state.stops.find((stop) => !isStopConfigured(stop));
+  if (incompleteStop) {
+    openStopEditor(incompleteStop.id);
+    showToast("Preencha os dados de todos os pontos.", true);
+    return;
+  }
 
   elements.calculateRoute.classList.add("loading");
   elements.calculateRoute.disabled = true;
@@ -362,10 +453,35 @@ async function calculateRoute() {
 
   const algorithm = elements.algorithm.value;
   const startedAt = performance.now();
+  const departureTimeMs = Date.now();
   let result;
+  let plannedStops;
 
   try {
-    result = await calculateSelectedAlgorithmRoute(algorithm);
+    const connected = connectStopsToGraph(state.graph, state.stops, {
+      fallbackSpeedKph: Number(elements.averageSpeed.value),
+    });
+    const calculationGraph = connected.graph;
+    const calculationRoutingGraph = buildRoutingGraph(calculationGraph, {
+      fallbackSpeedKph: Number(elements.averageSpeed.value),
+    });
+    const planningRoutes = calculatePlanningRoutes(
+      calculationGraph,
+      calculationRoutingGraph,
+      connected.stops,
+    );
+    plannedStops = optimizeStopOrder(
+      connected.stops,
+      (from, to) => planningRoutes.get(routeKey(from, to))?.travelTimeSeconds ?? Infinity,
+      departureTimeMs,
+    );
+    result = await calculateSelectedAlgorithmRoute(
+      algorithm,
+      plannedStops,
+      calculationGraph,
+      calculationRoutingGraph,
+      planningRoutes,
+    );
   } catch (error) {
     console.error(error);
     showToast("Ocorreu um erro durante o cálculo.", true);
@@ -386,32 +502,68 @@ async function calculateRoute() {
     ...result,
     computationTimeMs,
     algorithm,
+    departureTimeMs,
     pickupCount: pickups.length,
     deliveryCount: deliveries.length,
   };
+  const stopById = new Map(state.stops.map((stop) => [stop.id, stop]));
+  state.stops = plannedStops.map((stop) => stopById.get(stop.id));
+  renderStops();
   drawRoute(state.lastRoute);
   renderRouteSummary(state.lastRoute);
   elements.calculateRoute.querySelector("span").textContent = "Recalcular rota";
   showToast("Rota calculada.");
 }
 
-async function calculateSelectedAlgorithmRoute(algorithm) {
-  const pathResults = [];
+function calculatePlanningRoutes(graph, routingGraph, stops) {
+  const routes = new Map();
 
-  for (let index = 0; index < state.stops.length - 1; index += 1) {
-    const parameters = {
-      grafo: state.graph,
-      inicio: state.stops[index].nodeId,
-      destino: state.stops[index + 1].nodeId,
-    };
-    const nodeIds = algorithm === "bfs"
-      ? await bfs({ ...parameters, markers: new Map(), velocidade: 0 })
-      : aStar(parameters);
-
-    pathResults.push(buildPathResult(state.routingGraph, nodeIds));
+  for (const from of stops) {
+    for (const to of stops) {
+      if (from === to) continue;
+      const nodeIds = aStar({
+        grafo: graph,
+        inicio: from.nodeId,
+        destino: to.nodeId,
+        cost: "time",
+      });
+      routes.set(routeKey(from, to), buildPathResult(routingGraph, nodeIds));
+    }
   }
 
-  return assembleMultiStopRoute(state.stops, pathResults);
+  return routes;
+}
+
+function routeKey(from, to) {
+  return `${from.id}\u0000${to.id}`;
+}
+
+async function calculateSelectedAlgorithmRoute(
+  algorithm,
+  stops,
+  graph,
+  routingGraph,
+  planningRoutes,
+) {
+  const pathResults = [];
+
+  for (let index = 0; index < stops.length - 1; index += 1) {
+    if (algorithm === "astar") {
+      pathResults.push(planningRoutes.get(routeKey(stops[index], stops[index + 1])));
+      continue;
+    }
+
+    const parameters = {
+      grafo: graph,
+      inicio: stops[index].nodeId,
+      destino: stops[index + 1].nodeId,
+    };
+    const nodeIds = await bfs({ ...parameters, markers: new Map(), velocidade: 0 });
+
+    pathResults.push(buildPathResult(routingGraph, nodeIds));
+  }
+
+  return assembleMultiStopRoute(stops, pathResults);
 }
 
 function drawRoute(result) {
@@ -427,19 +579,26 @@ function drawRoute(result) {
 }
 
 function renderRouteSummary(result, scrollToSummary = true) {
-  const speed = Number(elements.averageSpeed.value);
   elements.totalDistance.textContent = formatDistance(result.distanceMeters);
-  elements.estimatedTime.textContent = formatDuration(result.distanceMeters, speed);
+  elements.estimatedTime.textContent = formatDuration(result.travelTimeSeconds);
   elements.pickupTotal.textContent = result.pickupCount;
   elements.deliveryTotal.textContent = result.deliveryCount;
   elements.computationTime.textContent = formatComputationTime(result.computationTimeMs);
   elements.selectedAlgorithm.textContent = getAlgorithmLabel(result.algorithm);
+  let cumulativeTimeSeconds = 0;
   elements.segmentList.innerHTML = result.segments.map((segment, index) => {
+    cumulativeTimeSeconds += segment.travelTimeSeconds;
     const mainRoad = segment.roads[0] || "Vias locais";
+    let deliveryDetails = "";
+    if (segment.to.type === "delivery") {
+      const estimatedArrival = result.departureTimeMs + cumulativeTimeSeconds * 1000;
+      const isLate = estimatedArrival > Date.parse(segment.to.deadline);
+      deliveryDetails = `<small class="deadline-detail ${isLate ? "late" : ""}">Chegada ${escapeHtml(formatTime(estimatedArrival))} · prazo ${escapeHtml(formatDeadline(segment.to.deadline))}${isLate ? " · atraso estimado" : ""}</small>`;
+    }
     return `<div class="segment-row">
       <span class="segment-number">${index + 1}</span>
-      <span class="segment-copy"><strong>${escapeHtml(segment.from.name)} → ${escapeHtml(segment.to.name)}</strong><small>${escapeHtml(mainRoad)}</small></span>
-      <span class="segment-metric">${formatDistance(segment.distanceMeters)} · ${formatDuration(segment.distanceMeters, speed)}</span>
+      <span class="segment-copy"><strong>${escapeHtml(segment.from.name)} → ${escapeHtml(segment.to.name)}</strong><small>${escapeHtml(mainRoad)}</small>${deliveryDetails}</span>
+      <span class="segment-metric">${formatDistance(segment.distanceMeters)} · ${formatDuration(segment.travelTimeSeconds)}</span>
     </div>`;
   }).join("");
   elements.routeSummary.hidden = false;
@@ -485,8 +644,8 @@ function formatDistance(meters) {
   return `${(meters / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 }
 
-function formatDuration(meters, speedKmh) {
-  const totalMinutes = Math.max(1, Math.round((meters / 1000 / speedKmh) * 60));
+function formatDuration(seconds) {
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
   if (totalMinutes < 60) return `${totalMinutes} min`;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
@@ -504,6 +663,29 @@ function getAlgorithmLabel(value) {
     astar: "A*",
     bfs: "BFS",
   }[value] || value;
+}
+
+function summarizeProducts(products) {
+  return products.map((product) => `${product.name} × ${product.quantity.toLocaleString("pt-BR")}`).join(", ");
+}
+
+function formatDeadline(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "prazo inválido";
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function formatTime(value) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 function pluralize(value, singular, plural) { return value === 1 ? singular : plural; }

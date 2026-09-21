@@ -1,4 +1,5 @@
 const EARTH_RADIUS_M = 6_371_000;
+const graphCache = new WeakMap();
 
 class PriorityQueue {
   constructor() {
@@ -76,30 +77,11 @@ class PriorityQueue {
   }
 }
 
-export function aStar({ grafo, inicio, destino }) {
-  const nodes = new Map(grafo.nodes.map((node) => [node.id, node]));
+export function aStar({ grafo, inicio, destino, cost = "distance" }) {
+  const { nodes, adjacency, maxSpeedKph } = prepareGraph(grafo, cost);
 
   if (!nodes.has(inicio) || !nodes.has(destino)) {
     return null;
-  }
-
-  const adjacency = new Map(grafo.nodes.map((node) => [node.id, []]));
-
-  for (const edge of grafo.edges) {
-    if (!adjacency.has(edge.from) || !nodes.has(edge.to)) {
-      continue;
-    }
-
-    const distance = Number(edge.distance_m);
-
-    if (!Number.isFinite(distance) || distance < 0) {
-      continue;
-    }
-
-    adjacency.get(edge.from).push({
-      node: edge.to,
-      cost: distance,
-    });
   }
 
   // Equivalente ao dicionário f_score inicializado com infinito no Python.
@@ -109,7 +91,7 @@ export function aStar({ grafo, inicio, destino }) {
 
   gScore.set(inicio, 0);
 
-  const startHScore = hScore(nodes.get(inicio), nodes.get(destino));
+  const startHScore = hScore(nodes.get(inicio), nodes.get(destino), cost, maxSpeedKph);
   fScore.set(inicio, startHScore);
 
   const queue = new PriorityQueue();
@@ -138,6 +120,8 @@ export function aStar({ grafo, inicio, destino }) {
       const neighborHScore = hScore(
         nodes.get(neighbor.node),
         nodes.get(destino),
+        cost,
+        maxSpeedKph,
       );
       const newFScore = newGScore + neighborHScore;
 
@@ -157,7 +141,36 @@ export function aStar({ grafo, inicio, destino }) {
   return null;
 }
 
-function hScore(node, target) {
+function prepareGraph(grafo, cost) {
+  if (!graphCache.has(grafo)) graphCache.set(grafo, new Map());
+  const cachedByCost = graphCache.get(grafo);
+  if (cachedByCost.has(cost)) return cachedByCost.get(cost);
+
+  const nodes = new Map(grafo.nodes.map((node) => [node.id, node]));
+  const adjacency = new Map(grafo.nodes.map((node) => [node.id, []]));
+  let maxSpeedKph = 1;
+
+  for (const edge of grafo.edges) {
+    if (!adjacency.has(edge.from) || !nodes.has(edge.to)) continue;
+
+    const distance = Number(edge.distance_m);
+    const travelTime = Number(edge.travel_time_s ?? edge.travel_time);
+    const edgeCost = cost === "time" ? travelTime : distance;
+    if (!Number.isFinite(edgeCost) || edgeCost < 0) continue;
+
+    adjacency.get(edge.from).push({ node: edge.to, cost: edgeCost });
+
+    if (cost === "time" && travelTime > 0 && distance >= 0) {
+      maxSpeedKph = Math.max(maxSpeedKph, (distance / travelTime) * 3.6);
+    }
+  }
+
+  const prepared = { nodes, adjacency, maxSpeedKph };
+  cachedByCost.set(cost, prepared);
+  return prepared;
+}
+
+function hScore(node, target, cost, maxSpeedKph) {
   const latitude1 = toRadians(node.latitude);
   const latitude2 = toRadians(target.latitude);
   const deltaLatitude = toRadians(target.latitude - node.latitude);
@@ -169,11 +182,15 @@ function hScore(node, target) {
       Math.cos(latitude2) *
       Math.sin(deltaLongitude / 2) ** 2;
 
-  return (
+  const distanceMeters = (
     EARTH_RADIUS_M *
     2 *
     Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
   );
+
+  return cost === "time"
+    ? distanceMeters / (maxSpeedKph / 3.6)
+    : distanceMeters;
 }
 
 function reconstructPath(path, startNode, targetNode) {

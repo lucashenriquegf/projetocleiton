@@ -36,11 +36,11 @@
         <section class="panel-section stops-section">
           <div class="section-heading">
             <h2>Paradas <span id="stop-count">0</span></h2>
-            <span class="sequence-label">ordem da rota</span>
+            <span class="sequence-label">ordem calculada</span>
           </div>
           <div id="empty-stops" class="empty-stops">Nenhum ponto adicionado.</div>
           <ol id="stop-list" class="stop-list" aria-live="polite"></ol>
-          <p id="order-hint" class="order-hint" hidden>Arraste para alterar a ordem.</p>
+          <p id="order-hint" class="order-hint" hidden>A ordem será calculada automaticamente.</p>
         </section>
 
         <section class="panel-section route-options">
@@ -51,7 +51,7 @@
           </select>
 
           <label for="average-speed" class="speed-label">
-            Velocidade média
+            Velocidade padrão para vias sem dados
             <span><strong id="speed-value">40</strong> km/h</span>
           </label>
           <input id="average-speed" type="range" min="20" max="80" value="40" step="5" />
@@ -102,6 +102,35 @@
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
       </section>
     </main>
+
+    <dialog id="delivery-dialog" class="delivery-dialog">
+      <form id="delivery-form">
+        <div class="dialog-header">
+          <div>
+            <h2 id="delivery-dialog-title">Detalhes do ponto</h2>
+            <p id="stop-dialog-description">Informe os produtos e quantidades.</p>
+          </div>
+          <button id="close-delivery-dialog" class="dialog-close" type="button" aria-label="Fechar">×</button>
+        </div>
+
+        <label id="deadline-field" class="dialog-field" for="delivery-deadline">
+          Prazo limite
+          <input id="delivery-deadline" type="datetime-local" required />
+        </label>
+
+        <div class="products-heading">
+          <span>Produtos</span>
+          <button id="add-product" type="button">+ Adicionar produto</button>
+        </div>
+        <div id="products-editor" class="products-editor"></div>
+
+        <div class="dialog-actions">
+          <button id="cancel-delivery" class="secondary-button" type="button">Cancelar</button>
+          <button class="save-button" type="submit">Salvar ponto</button>
+        </div>
+      </form>
+    </dialog>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script type="module" src="/app.js"></script>
   </body>
