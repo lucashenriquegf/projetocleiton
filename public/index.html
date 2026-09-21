@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>Visualizador de Grafos</title>
+
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+      }
+
+      #map {
+        width: 100%;
+        height: 100%;
+        background: #f5f5f5;
+      }
+
+      /* Informações do grafo */
+      #info {
+        position: absolute;
+        top: 10px;
+        left: 50px;
+        z-index: 1000;
+
+        background: white;
+        padding: 10px 15px;
+
+        border-radius: 5px;
+
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+        font-family: Arial, sans-serif;
+      }
+
+      /* Painel de roteamento */
+      #routing-panel {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+
+        z-index: 1000;
+
+        background: white;
+
+        padding: 12px;
+
+        width: 190px;
+
+        border-radius: 6px;
+
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+
+        font-family: Arial, sans-serif;
+      }
+
+      #routing-panel h3 {
+        margin: 0 0 10px 0;
+        font-size: 15px;
+      }
+
+      #routing-panel label {
+        display: block;
+        margin-bottom: 5px;
+        font-size: 13px;
+      }
+
+      #algorithm {
+        width: 100%;
+
+        padding: 6px;
+
+        margin-bottom: 10px;
+
+        border: 1px solid #ccc;
+        border-radius: 4px;
+      }
+
+      #calculate-route {
+        width: 100%;
+
+        padding: 7px;
+
+        border: none;
+        border-radius: 4px;
+
+        background: #333;
+        color: white;
+
+        cursor: pointer;
+      }
+
+      #calculate-route:hover {
+        background: #555;
+      }
+
+      #selection-info {
+        margin-top: 10px;
+
+        font-size: 12px;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="info">Carregando grafo...</div>
+
+    <!-- Painel de roteamento -->
+    <div id="routing-panel">
+      <h3>Roteamento</h3>
+
+      <label for="algorithm"> Algoritmo: </label>
+
+      <select id="algorithm">
+        <option value="dijkstra">Dijkstra</option>
+
+        <option value="astar">A*</option>
+
+        <option value="bfs">Busca em Largura (BFS)</option>
+
+        <option value="dfs">Busca em Profundidade (DFS)</option>
+      </select>
+
+      <button id="calculate-route">Calcular rota</button>
+
+      <div id="selection-info">
+        Origem: não selecionada
+        <br />
+        Destino: não selecionado
+      </div>
+    </div>
+
+    <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script type="module">
+      import { bfs } from "/algorithms/BSF.js";
+
+      async function carregarGrafo() {
+        const resposta = await fetch("/api/grafo");
+
+        if (!resposta.ok) {
+          throw new Error("Não foi possível carregar o grafo.");
+        }
+
+        const grafo = await resposta.json();
+
+        console.log(grafo);
+
+        // -------------------------
+        // Informações
+        // -------------------------
+
+        document.getElementById("info").innerHTML = `
+                <strong>${grafo.city}</strong><br>
+                Nós: ${grafo.nodes.length}<br>
+                Arestas: ${grafo.edges.length}
+            `;
+
+        // -------------------------
+        // Criar mapa
+        // -------------------------
+
+        const primeiroNo = grafo.nodes[0];
+
+        const map = L.map("map").setView(
+          [primeiroNo.latitude, primeiroNo.longitude],
+          14,
+        );
+
+        // -------------------------
+        // Indexar nós
+        // -------------------------
+
+        const nodes = new Map();
+
+        for (const node of grafo.nodes) {
+          nodes.set(node.id, node);
+        }
+
+        const edgeLayers = [];
+        const edgeMap = new Map();
+
+        // -------------------------
+        // Desenhar arestas
+        // -------------------------
+
+        for (const edge of grafo.edges) {
+          const origem = nodes.get(edge.from);
+          const destino = nodes.get(edge.to);
+
+          if (!origem || !destino) {
+            continue;
+          }
+
+          const linha = L.polyline(
+            [
+              [origem.latitude, origem.longitude],
+              [destino.latitude, destino.longitude],
+            ],
+            {
+              weight: 2,
+              opacity: 0.7,
+              color: "#555",
+            },
+          );
+
+          linha.bindPopup(`
+                    <strong>
+                        ${edge.road_name ?? "Rua sem nome"}
+                    </strong>
+                    <br><br>
+
+                    <strong>Origem:</strong>
+                    ${edge.from}
+
+                    <br>
+
+                    <strong>Destino:</strong>
+                    ${edge.to}
+
+                    <br>
+
+                    <strong>Distância:</strong>
+                    ${
+                      edge.distance_m
+                        ? edge.distance_m.toFixed(2) + " m"
+                        : "N/A"
+                    }
+                `);
+
+          linha.addTo(map);
+
+          edgeLayers.push({
+            edge,
+            layer: linha,
+          });
+
+          edgeMap.set(`${edge.from}-${edge.to}`, linha);
+        }
+
+        // -------------------------
+        // Estado da seleção
+        // -------------------------
+
+        let origemSelecionada = null;
+        let destinoSelecionado = null;
+
+        // -------------------------
+        // Destacar rota
+        // -------------------------
+
+        async function destacarRota(caminho) {
+          console.log("Caminho encontrado:", caminho);
+
+          for (let i = 0; i < caminho.length - 1; i++) {
+            const atual = caminho[i];
+            const proximo = caminho[i + 1];
+
+            const linha = edgeMap.get(`${atual}-${proximo}`);
+
+            if (!linha) {
+              console.warn(`Aresta não encontrada: ${atual} -> ${proximo}`);
+              continue;
+            }
+
+            linha.setStyle({
+              color: "yellow",
+              weight: 5,
+              opacity: 1,
+            });
+
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        }
+
+        // -------------------------
+        // Desenhar nós
+        // -------------------------
+
+        const markers = new Map();
+
+        for (const node of grafo.nodes) {
+          const marcador = L.circleMarker([node.latitude, node.longitude], {
+            radius: 3,
+
+            weight: 1,
+
+            color: "#333",
+
+            fillColor: "#3388ff",
+
+            fillOpacity: 0.8,
+          });
+
+          // -------------------------
+          // Clique no nó
+          // -------------------------
+
+          marcador.on("click", function () {
+            // Primeiro clique = origem
+            if (origemSelecionada === null) {
+              origemSelecionada = node;
+
+              marcador.setStyle({
+                fillColor: "green",
+                color: "green",
+              });
+            }
+
+            // Segundo clique = destino
+            else if (destinoSelecionado === null) {
+              // Impede origem e destino serem o mesmo nó
+              if (node.id === origemSelecionada.id) {
+                return;
+              }
+
+              destinoSelecionado = node;
+
+              marcador.setStyle({
+                fillColor: "red",
+                color: "red",
+              });
+            }
+
+            // Se já existem os dois,
+            // começa uma nova seleção
+            else {
+              // Restaurar origem
+              markers.get(origemSelecionada.id).setStyle({
+                fillColor: "#3388ff",
+                color: "#333",
+              });
+
+              // Restaurar destino
+              markers.get(destinoSelecionado.id).setStyle({
+                fillColor: "#3388ff",
+                color: "#333",
+              });
+
+              origemSelecionada = node;
+              destinoSelecionado = null;
+
+              marcador.setStyle({
+                fillColor: "green",
+                color: "green",
+              });
+            }
+
+            atualizarInformacoes();
+          });
+
+          marcador.bindPopup(`
+                    <strong>Nó</strong>
+                    <br><br>
+
+                    ID: ${node.id}
+
+                    <br>
+
+                    Latitude: ${node.latitude}
+
+                    <br>
+
+                    Longitude: ${node.longitude}
+                `);
+
+          marcador.addTo(map);
+
+          markers.set(node.id, marcador);
+        }
+
+        // -------------------------
+        // Atualizar informações
+        // -------------------------
+
+        function atualizarInformacoes() {
+          const info = document.getElementById("selection-info");
+
+          info.innerHTML = `
+                    Origem:
+                    ${
+                      origemSelecionada
+                        ? origemSelecionada.id
+                        : "não selecionada"
+                    }
+
+                    <br>
+
+                    Destino:
+                    ${
+                      destinoSelecionado
+                        ? destinoSelecionado.id
+                        : "não selecionado"
+                    }
+                `;
+        }
+
+        // -------------------------
+        // Botão calcular rota
+        // -------------------------
+        document
+          .getElementById("calculate-route")
+          .addEventListener("click", async function () {
+            if (!origemSelecionada) {
+              alert("Selecione o nó de origem.");
+              return;
+            }
+
+            if (!destinoSelecionado) {
+              alert("Selecione o nó de destino.");
+              return;
+            }
+
+            const algoritmo = document.getElementById("algorithm").value;
+
+            if (algoritmo !== "bfs") {
+              alert("Por enquanto, apenas o BFS está implementado.");
+              return;
+            }
+
+            console.log("Origem:", origemSelecionada.id);
+            console.log("Destino:", destinoSelecionado.id);
+
+            // Executar BFS
+            const caminho = await bfs({
+              grafo,
+              inicio: origemSelecionada.id,
+              destino: destinoSelecionado.id,
+              markers,
+              velocidade: 80,
+            });
+
+            // Nenhuma rota encontrada
+            if (!caminho) {
+              alert("Não foi encontrada uma rota.");
+              return;
+            }
+
+            console.log("Caminho encontrado:", caminho);
+
+            // Destacar rota
+            await destacarRota(caminho);
+          });
+      }
+
+      // -------------------------
+      // Iniciar
+      // -------------------------
+
+      carregarGrafo().catch((error) => {
+        console.error(error);
+
+        document.getElementById("info").innerHTML = "Erro ao carregar o grafo.";
+      });
+    </script>
+  </body>
+</html>
