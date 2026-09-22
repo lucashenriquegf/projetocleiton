@@ -1,5 +1,4 @@
 const EARTH_RADIUS_M = 6_371_000;
-const EXACT_ORDER_LIMIT = 200_000;
 
 export function buildRoutingGraph(graph, { fallbackSpeedKph = 40 } = {}) {
   const nodes = new Map();
@@ -180,17 +179,57 @@ export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}
   };
 }
 
-export function optimizeStopOrder(stops, getTravelTime, departureTimeMs = Date.now()) {
+export function prioritizeStopOrder(
+  stops,
+  { departureTimeMs = Date.now(), averageSpeedKph = 40 } = {},
+) {
   const pickups = stops.filter((stop) => stop.type === "pickup");
   const deliveries = stops.filter((stop) => stop.type === "delivery");
   if (!pickups.length || !deliveries.length) return [...stops];
 
-  const combinations = cappedFactorial(pickups.length) * cappedFactorial(deliveries.length);
-  if (combinations <= EXACT_ORDER_LIMIT) {
-    return findExactOrder(pickups, deliveries, getTravelTime, departureTimeMs);
+  const urgentDelivery = deliveries.reduce((urgent, delivery) =>
+    deadlineTimestamp(delivery) < deadlineTimestamp(urgent) ? delivery : urgent,
+  );
+
+  const reversePickupOrder = [];
+  const remainingPickups = [...pickups];
+  let anchor = urgentDelivery;
+
+  while (remainingPickups.length) {
+    remainingPickups.sort((first, second) =>
+      estimatedTravelTimeSeconds(first, anchor, averageSpeedKph) -
+      estimatedTravelTimeSeconds(second, anchor, averageSpeedKph),
+    );
+    const nearest = remainingPickups.shift();
+    reversePickupOrder.push(nearest);
+    anchor = nearest;
   }
 
-  return findHeuristicOrder(pickups, deliveries, getTravelTime, departureTimeMs);
+  const pickupOrder = reversePickupOrder.reverse();
+  const deliveryOrder = [];
+  const remainingDeliveries = [...deliveries];
+  let current = pickupOrder.at(-1);
+  let elapsedSeconds = estimatedSequenceTime(pickupOrder, averageSpeedKph);
+
+  while (remainingDeliveries.length) {
+    remainingDeliveries.sort((first, second) => {
+      const firstTravel = estimatedTravelTimeSeconds(current, first, averageSpeedKph);
+      const secondTravel = estimatedTravelTimeSeconds(current, second, averageSpeedKph);
+      const firstSlack = deadlineTimestamp(first) -
+        (departureTimeMs + (elapsedSeconds + firstTravel) * 1000);
+      const secondSlack = deadlineTimestamp(second) -
+        (departureTimeMs + (elapsedSeconds + secondTravel) * 1000);
+
+      return firstSlack - secondSlack || firstTravel - secondTravel;
+    });
+
+    const next = remainingDeliveries.shift();
+    elapsedSeconds += estimatedTravelTimeSeconds(current, next, averageSpeedKph);
+    deliveryOrder.push(next);
+    current = next;
+  }
+
+  return [...pickupOrder, ...deliveryOrder];
 }
 
 export function buildPathResult(routingGraph, nodeIds) {
@@ -264,168 +303,42 @@ export function assembleMultiStopRoute(stops, pathResults) {
   return { segments, nodeIds, coordinates, distanceMeters, travelTimeSeconds };
 }
 
-function findExactOrder(pickups, deliveries, getTravelTime, departureTimeMs) {
-  let best = null;
+export function findStopsOnPath(nodeIds, remainingStops, allowedType) {
+  const nodePositions = new Map(
+    nodeIds.map((nodeId, index) => [nodeId, index]),
+  );
 
-  function visitPickups(sequence, remaining, elapsedSeconds) {
-    if (!remaining.length) {
-      visitDeliveries(sequence, deliveries, elapsedSeconds, 0, 0);
-      return;
-    }
-
-    for (let index = 0; index < remaining.length; index += 1) {
-      const stop = remaining[index];
-      const travelTime = sequence.length ? getTravelTime(sequence.at(-1), stop) : 0;
-      if (!Number.isFinite(travelTime)) continue;
-      visitPickups(
-        [...sequence, stop],
-        remaining.filter((_, candidateIndex) => candidateIndex !== index),
-        elapsedSeconds + travelTime,
-      );
-    }
-  }
-
-  function visitDeliveries(sequence, remaining, elapsedSeconds, lateCount, totalLatenessSeconds) {
-    if (!remaining.length) {
-      const candidate = {
-        stops: sequence,
-        score: [lateCount, totalLatenessSeconds, elapsedSeconds],
-      };
-      if (!best || compareScores(candidate.score, best.score) < 0) best = candidate;
-      return;
-    }
-
-    for (let index = 0; index < remaining.length; index += 1) {
-      const stop = remaining[index];
-      const travelTime = getTravelTime(sequence.at(-1), stop);
-      if (!Number.isFinite(travelTime)) continue;
-      const nextElapsed = elapsedSeconds + travelTime;
-      const lateness = Math.max(0, departureTimeMs / 1000 + nextElapsed - Date.parse(stop.deadline) / 1000);
-      visitDeliveries(
-        [...sequence, stop],
-        remaining.filter((_, candidateIndex) => candidateIndex !== index),
-        nextElapsed,
-        lateCount + Number(lateness > 0),
-        totalLatenessSeconds + lateness,
-      );
-    }
-  }
-
-  visitPickups([], pickups, 0);
-  return best?.stops || [...pickups, ...deliveries];
+  return remainingStops
+    .filter((stop) => stop.type === allowedType && nodePositions.has(stop.nodeId))
+    .sort((first, second) =>
+      nodePositions.get(first.nodeId) - nodePositions.get(second.nodeId),
+    );
 }
 
-function findHeuristicOrder(pickups, deliveries, getTravelTime, departureTimeMs) {
-  let best = null;
-
-  for (const firstPickup of pickups) {
-    const pickupOrder = [firstPickup];
-    const remainingPickups = pickups.filter((stop) => stop !== firstPickup);
-
-    while (remainingPickups.length) {
-      const current = pickupOrder.at(-1);
-      remainingPickups.sort((first, second) =>
-        getTravelTime(current, first) - getTravelTime(current, second),
-      );
-      pickupOrder.push(remainingPickups.shift());
-    }
-
-    for (const firstDelivery of deliveries) {
-      const sequence = [...pickupOrder, firstDelivery];
-      const remainingDeliveries = deliveries.filter((stop) => stop !== firstDelivery);
-
-      while (remainingDeliveries.length) {
-        const current = sequence.at(-1);
-        const elapsed = calculateSequenceScore(sequence, getTravelTime, departureTimeMs).elapsedSeconds;
-        remainingDeliveries.sort((first, second) => {
-          const firstArrival = departureTimeMs / 1000 + elapsed + getTravelTime(current, first);
-          const secondArrival = departureTimeMs / 1000 + elapsed + getTravelTime(current, second);
-          const firstSlack = Date.parse(first.deadline) / 1000 - firstArrival;
-          const secondSlack = Date.parse(second.deadline) / 1000 - secondArrival;
-          return firstSlack - secondSlack || getTravelTime(current, first) - getTravelTime(current, second);
-        });
-        sequence.push(remainingDeliveries.shift());
-      }
-
-      const improved = improveOrder(sequence, pickups.length, getTravelTime, departureTimeMs);
-      const score = calculateSequenceScore(improved, getTravelTime, departureTimeMs).score;
-      if (!best || compareScores(score, best.score) < 0) best = { stops: improved, score };
-    }
-  }
-
-  return best?.stops || [...pickups, ...deliveries];
-}
-
-function improveOrder(initialOrder, pickupCount, getTravelTime, departureTimeMs) {
-  let order = [...initialOrder];
-  let score = calculateSequenceScore(order, getTravelTime, departureTimeMs).score;
-  let improved = true;
-
-  while (improved) {
-    improved = false;
-    const ranges = [[0, pickupCount], [pickupCount, order.length]];
-
-    for (const [start, end] of ranges) {
-      for (let first = start; first < end - 1; first += 1) {
-        for (let second = first + 1; second < end; second += 1) {
-          const candidate = [...order];
-          [candidate[first], candidate[second]] = [candidate[second], candidate[first]];
-          const candidateScore = calculateSequenceScore(candidate, getTravelTime, departureTimeMs).score;
-          if (compareScores(candidateScore, score) < 0) {
-            order = candidate;
-            score = candidateScore;
-            improved = true;
-          }
-        }
-      }
-    }
-  }
-
-  return order;
-}
-
-function calculateSequenceScore(stops, getTravelTime, departureTimeMs) {
+function estimatedSequenceTime(stops, averageSpeedKph) {
   let elapsedSeconds = 0;
-  let lateCount = 0;
-  let totalLatenessSeconds = 0;
-
   for (let index = 1; index < stops.length; index += 1) {
-    const travelTime = getTravelTime(stops[index - 1], stops[index]);
-    if (!Number.isFinite(travelTime)) {
-      return { elapsedSeconds: Infinity, score: [Infinity, Infinity, Infinity] };
-    }
-    elapsedSeconds += travelTime;
-
-    if (stops[index].type === "delivery") {
-      const lateness = Math.max(
-        0,
-        departureTimeMs / 1000 + elapsedSeconds - Date.parse(stops[index].deadline) / 1000,
-      );
-      lateCount += Number(lateness > 0);
-      totalLatenessSeconds += lateness;
-    }
+    elapsedSeconds += estimatedTravelTimeSeconds(
+      stops[index - 1],
+      stops[index],
+      averageSpeedKph,
+    );
   }
-
-  return {
-    elapsedSeconds,
-    score: [lateCount, totalLatenessSeconds, elapsedSeconds],
-  };
+  return elapsedSeconds;
 }
 
-function compareScores(first, second) {
-  for (let index = 0; index < first.length; index += 1) {
-    if (first[index] !== second[index]) return first[index] - second[index];
-  }
-  return 0;
+function estimatedTravelTimeSeconds(from, to, averageSpeedKph) {
+  const distanceMeters = coordinateDistanceMeters(
+    [Number(from.latitude), Number(from.longitude)],
+    [Number(to.latitude), Number(to.longitude)],
+  );
+  const speedMetersPerSecond = Math.max(1, Number(averageSpeedKph)) / 3.6;
+  return distanceMeters / speedMetersPerSecond;
 }
 
-function cappedFactorial(value) {
-  let result = 1;
-  for (let number = 2; number <= value; number += 1) {
-    result *= number;
-    if (result > EXACT_ORDER_LIMIT) return EXACT_ORDER_LIMIT + 1;
-  }
-  return result;
+function deadlineTimestamp(stop) {
+  const timestamp = Date.parse(stop.deadline);
+  return Number.isFinite(timestamp) ? timestamp : Number.POSITIVE_INFINITY;
 }
 
 function attachStop(attachmentsByEdge, edge, stop, projection) {

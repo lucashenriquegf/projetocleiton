@@ -159,9 +159,6 @@ button, input, select { font: inherit; }
 
 .map-instruction { position: absolute; z-index: 600; top: 17px; left: 50%; display: flex; align-items: center; gap: 9px; padding: 8px 9px 8px 12px; color: #fff; background: #253d2f; border-radius: 25px; box-shadow: 0 7px 24px rgba(25,48,33,.2); font-size: 10px; font-weight: 700; transform: translateX(-50%); }
 .map-instruction button { width: 20px; height: 20px; padding: 0; color: #fff; background: rgba(255,255,255,.14); border: 0; border-radius: 50%; cursor: pointer; }
-.calculation-progress { position: absolute; z-index: 600; top: 17px; left: 50%; display: flex; align-items: center; gap: 8px; padding: 8px 12px; color: #fff; background: rgba(37,61,47,.94); border-radius: 25px; box-shadow: 0 7px 24px rgba(25,48,33,.2); font-size: 10px; font-weight: 700; transform: translateX(-50%); }
-.calculation-progress i { width: 8px; height: 8px; background: #f0b429; border-radius: 50%; animation: progress-pulse 900ms ease-in-out infinite; }
-@keyframes progress-pulse { 50% { opacity: .35; transform: scale(.7); } }
 .map-legend { position: absolute; z-index: 500; right: 16px; bottom: 24px; display: flex; gap: 12px; padding: 7px 10px; color: #46564b; background: rgba(255,255,255,.92); border-radius: 8px; box-shadow: 0 5px 18px rgba(31,54,39,.12); font-size: 8px; font-weight: 700; }
 .map-legend span { display: flex; align-items: center; gap: 5px; }
 .legend-dot { width: 7px; height: 7px; background: var(--green); border-radius: 50%; }

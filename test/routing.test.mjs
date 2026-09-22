@@ -11,7 +11,8 @@ import {
   connectStopsToGraph,
   findNearestEdge,
   findNearestNode,
-  optimizeStopOrder,
+  findStopsOnPath,
+  prioritizeStopOrder,
 } from "../src/algorithms/routing.mjs";
 
 const rawGraph = {
@@ -243,29 +244,47 @@ test("ponto solto é associado ao nó mais próximo", () => {
   assert.equal(findNearestNode(routingGraph, -16.4001, -49.4999).id, 1);
 });
 
-test("planejador decide a ordem das coletas e entregas usando tempo e prazo", () => {
+test("planejador prioriza prazo e deixa a coleta mais próxima da entrega urgente por último", () => {
   const departureTime = Date.parse("2026-09-22T08:00:00Z");
   const stops = [
-    { id: "delivery-later", type: "delivery", deadline: "2026-09-22T08:16:40Z" },
-    { id: "pickup-2", type: "pickup" },
-    { id: "delivery-urgent", type: "delivery", deadline: "2026-09-22T08:01:40Z" },
-    { id: "pickup-1", type: "pickup" },
+    {
+      id: "delivery-later",
+      type: "delivery",
+      deadline: "2026-09-22T10:00:00Z",
+      latitude: 0,
+      longitude: 0.002,
+    },
+    { id: "pickup-near", type: "pickup", latitude: 0, longitude: 0.001 },
+    {
+      id: "delivery-urgent",
+      type: "delivery",
+      deadline: "2026-09-22T08:30:00Z",
+      latitude: 0,
+      longitude: 0,
+    },
+    { id: "pickup-far", type: "pickup", latitude: 0, longitude: 0.01 },
   ];
-  const travelTimes = new Map([
-    ["pickup-1:pickup-2", 20],
-    ["pickup-2:pickup-1", 20],
-    ["pickup-2:delivery-urgent", 20],
-    ["pickup-2:delivery-later", 10],
-    ["pickup-1:delivery-urgent", 200],
-    ["pickup-1:delivery-later", 10],
-    ["delivery-urgent:delivery-later", 20],
-    ["delivery-later:delivery-urgent", 100],
-  ]);
-  const getTravelTime = (from, to) => travelTimes.get(`${from.id}:${to.id}`) ?? 500;
 
   assert.deepEqual(
-    optimizeStopOrder(stops, getTravelTime, departureTime).map((stop) => stop.id),
-    ["pickup-1", "pickup-2", "delivery-urgent", "delivery-later"],
+    prioritizeStopOrder(stops, {
+      departureTimeMs: departureTime,
+      averageSpeedKph: 40,
+    }).map((stop) => stop.id),
+    ["pickup-far", "pickup-near", "delivery-urgent", "delivery-later"],
+  );
+});
+
+test("pontos encontrados no caminho são aproveitados sem nova busca", () => {
+  const remainingStops = [
+    { id: "target", nodeId: 4, type: "delivery" },
+    { id: "pickup", nodeId: 2, type: "pickup" },
+    { id: "along-the-way", nodeId: 3, type: "delivery" },
+  ];
+
+  assert.deepEqual(
+    findStopsOnPath([1, 2, 3, 4], remainingStops, "delivery")
+      .map((stop) => stop.id),
+    ["along-the-way", "target"],
   );
 });
 

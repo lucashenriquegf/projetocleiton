@@ -4,7 +4,8 @@ import {
   buildPathResult,
   connectStopsToGraph,
   findNearestEdge,
-  optimizeStopOrder,
+  findStopsOnPath,
+  prioritizeStopOrder,
 } from "/algorithms/routing.mjs";
 import { aStar } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
@@ -21,9 +22,6 @@ const state = {
   explorationGroup: null,
   exploredEdgeKeys: new Set(),
   activeExplorationLayer: null,
-  explorationStepCount: 0,
-  searchPairIndex: 0,
-  searchPairTotal: 0,
   currentCalculationController: null,
   addMode: null,
   dragDepth: 0,
@@ -44,7 +42,6 @@ const elements = {
   calculateRoute: document.querySelector("#calculate-route"),
   cancelCalculation: document.querySelector("#cancel-calculation"),
   calculationNote: document.querySelector("#calculation-note"),
-  calculationProgress: document.querySelector("#calculation-progress"),
   algorithm: document.querySelector("#algorithm"),
   averageSpeed: document.querySelector("#average-speed"),
   speedValue: document.querySelector("#speed-value"),
@@ -418,7 +415,6 @@ function cancelCalculation() {
   controller.abort();
   elements.cancelCalculation.disabled = true;
   elements.cancelCalculation.textContent = "Cancelando…";
-  elements.calculationProgress.querySelector("span").textContent = "Cancelando cálculo…";
 }
 
 async function calculateRoute() {
@@ -446,8 +442,6 @@ async function calculateRoute() {
   elements.cancelCalculation.hidden = false;
   elements.cancelCalculation.disabled = false;
   elements.cancelCalculation.textContent = "Cancelar";
-  elements.calculationProgress.hidden = false;
-  elements.calculationProgress.querySelector("span").textContent = "Preparando buscas…";
   elements.algorithm.disabled = true;
   elements.averageSpeed.disabled = true;
   elements.clearRoute.disabled = true;
@@ -468,22 +462,19 @@ async function calculateRoute() {
       fallbackSpeedKph: Number(elements.averageSpeed.value),
     });
     setExplorationVisibility(true);
-    const planningRoutes = await calculatePlanningRoutes(
+    plannedStops = prioritizeStopOrder(connected.stops, {
+      departureTimeMs,
+      averageSpeedKph: Number(elements.averageSpeed.value),
+    });
+    const calculatedRoute = await calculateSelectedAlgorithmRoute(
       algorithm,
+      plannedStops,
       calculationGraph,
       calculationRoutingGraph,
-      connected.stops,
       calculationController.signal,
     );
-    plannedStops = optimizeStopOrder(
-      connected.stops,
-      (from, to) => planningRoutes.get(routeKey(from, to))?.travelTimeSeconds ?? Infinity,
-      departureTimeMs,
-    );
-    result = calculateSelectedAlgorithmRoute(
-      plannedStops,
-      planningRoutes,
-    );
+    plannedStops = calculatedRoute.stops;
+    result = calculatedRoute.result;
   } catch (error) {
     if (error.name === "AbortError") {
       result = { cancelled: true };
@@ -535,48 +526,6 @@ async function calculateRoute() {
   showToast("Rota calculada.");
 }
 
-async function calculatePlanningRoutes(
-  algorithm,
-  graph,
-  routingGraph,
-  stops,
-  signal,
-) {
-  const routes = new Map();
-  const searches = [];
-
-  for (const from of stops) {
-    for (const to of stops) {
-      if (from === to || (from.type === "delivery" && to.type === "pickup")) continue;
-      searches.push({ from, to });
-    }
-  }
-
-  state.searchPairTotal = searches.length;
-  for (let index = 0; index < searches.length; index += 1) {
-    throwIfCalculationCancelled(signal);
-    const { from, to } = searches[index];
-    state.searchPairIndex = index + 1;
-    updateCalculationProgress(algorithm);
-    const nodeIds = await calculatePathWithSelectedAlgorithm(
-      algorithm,
-      graph,
-      routingGraph,
-      from.nodeId,
-      to.nodeId,
-      signal,
-    );
-    routes.set(routeKey(from, to), buildPathResult(routingGraph, nodeIds));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  }
-
-  return routes;
-}
-
-function routeKey(from, to) {
-  return `${from.id}\u0000${to.id}`;
-}
-
 async function calculatePathWithSelectedAlgorithm(
   algorithm,
   graph,
@@ -593,7 +542,7 @@ async function calculatePathWithSelectedAlgorithm(
     const nodeIds = aStar({ ...parameters, cost: "time", trace });
     trace.forEach(({ from, to }) => {
       throwIfCalculationCancelled(signal);
-      recordExplorationProgress(routingGraph, from, to, algorithm);
+      recordExplorationProgress(routingGraph, from, to);
     });
     return nodeIds;
   }
@@ -604,7 +553,7 @@ async function calculatePathWithSelectedAlgorithm(
       cost: "time",
       signal,
       onExplore: ({ de, para }) =>
-        recordExplorationProgress(routingGraph, de, para, algorithm),
+        recordExplorationProgress(routingGraph, de, para),
       yieldControl: () => new Promise((resolve) => setTimeout(resolve, 0)),
       yieldEvery: 64,
     });
@@ -616,7 +565,7 @@ async function calculatePathWithSelectedAlgorithm(
       cost: "time",
       signal,
       onExplore: ({ de, para }) =>
-        recordExplorationProgress(routingGraph, de, para, algorithm),
+        recordExplorationProgress(routingGraph, de, para),
       yieldControl: () => new Promise((resolve) => setTimeout(resolve, 0)),
       yieldEvery: 64,
     });
@@ -628,23 +577,71 @@ async function calculatePathWithSelectedAlgorithm(
     destino,
     routingGraph,
     signal,
-    algorithm,
   );
   const nodeIds = await bfs({ ...parameters, markers, velocidade: 0 });
   throwIfCalculationCancelled(signal);
   return nodeIds;
 }
 
-function calculateSelectedAlgorithmRoute(stops, planningRoutes) {
-  const pathResults = [];
-
-  for (let index = 0; index < stops.length - 1; index += 1) {
-    pathResults.push(
-      planningRoutes.get(routeKey(stops[index], stops[index + 1])) ?? null,
-    );
+async function calculateSelectedAlgorithmRoute(
+  algorithm,
+  stops,
+  graph,
+  routingGraph,
+  signal,
+) {
+  if (stops.length < 2) {
+    return { stops: [...stops], result: assembleMultiStopRoute(stops, []) };
   }
 
-  return assembleMultiStopRoute(stops, pathResults);
+  const orderedStops = [stops[0]];
+  const remainingStops = stops.slice(1);
+  const pathResults = [];
+
+  while (remainingStops.length) {
+    throwIfCalculationCancelled(signal);
+    const current = orderedStops.at(-1);
+    const target = remainingStops[0];
+    const nodeIds = await calculatePathWithSelectedAlgorithm(
+      algorithm,
+      graph,
+      routingGraph,
+      current.nodeId,
+      target.nodeId,
+      signal,
+    );
+    if (!nodeIds || nodeIds.at(-1) !== target.nodeId) {
+      return {
+        stops,
+        result: assembleMultiStopRoute([current, target], [null]),
+      };
+    }
+
+    const encounteredStops = findStopsOnPath(
+      nodeIds,
+      remainingStops,
+      target.type,
+    );
+    let previousNodeIndex = 0;
+
+    for (const stop of encounteredStops) {
+      const nodeIndex = nodeIds.indexOf(stop.nodeId, previousNodeIndex);
+      if (nodeIndex < 0) continue;
+
+      const segmentNodeIds = nodeIds.slice(previousNodeIndex, nodeIndex + 1);
+      pathResults.push(buildPathResult(routingGraph, segmentNodeIds));
+      orderedStops.push(stop);
+      remainingStops.splice(remainingStops.indexOf(stop), 1);
+      previousNodeIndex = nodeIndex;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  return {
+    stops: orderedStops,
+    result: assembleMultiStopRoute(orderedStops, pathResults),
+  };
 }
 
 function drawRoute(result) {
@@ -699,7 +696,6 @@ function createBfsVisualizationMarkers(
   targetNode,
   routingGraph,
   signal,
-  algorithm,
 ) {
   const predecessors = buildBfsPredecessors(graph, startNode, targetNode);
   const markers = new Map();
@@ -708,7 +704,7 @@ function createBfsVisualizationMarkers(
     markers.set(node, {
       setStyle: () => {
         throwIfCalculationCancelled(signal);
-        recordExplorationProgress(routingGraph, predecessor, node, algorithm);
+        recordExplorationProgress(routingGraph, predecessor, node);
       },
     });
   }
@@ -781,25 +777,8 @@ function recordExploredEdge(routingGraph, from, to) {
   state.activeExplorationLayer.bringToFront();
 }
 
-function recordExplorationProgress(routingGraph, from, to, algorithm) {
-  state.explorationStepCount += 1;
+function recordExplorationProgress(routingGraph, from, to) {
   recordExploredEdge(routingGraph, from, to);
-
-  if (
-    state.explorationStepCount === 1 ||
-    state.explorationStepCount % 25 === 0
-  ) {
-    updateCalculationProgress(algorithm);
-  }
-}
-
-function updateCalculationProgress(algorithm) {
-  const pair = state.searchPairTotal
-    ? `trecho ${state.searchPairIndex}/${state.searchPairTotal}`
-    : "preparando trechos";
-  const expansions = state.explorationStepCount.toLocaleString("pt-BR");
-  elements.calculationProgress.querySelector("span").textContent =
-    `${getAlgorithmLabel(algorithm)} · ${pair} · ${expansions} expansões`;
 }
 
 function throwIfCalculationCancelled(signal) {
@@ -823,7 +802,6 @@ function finishExploration() {
     state.explorationGroup.removeLayer(state.activeExplorationLayer);
   }
   state.activeExplorationLayer = null;
-  elements.calculationProgress.hidden = true;
   setExplorationVisibility(false);
   elements.explorationToggle.checked = false;
   elements.explorationToggle.disabled = state.exploredEdgeKeys.size === 0;
@@ -835,10 +813,6 @@ function clearExploration() {
   state.explorationGroup.clearLayers();
   state.exploredEdgeKeys.clear();
   state.activeExplorationLayer = null;
-  state.explorationStepCount = 0;
-  state.searchPairIndex = 0;
-  state.searchPairTotal = 0;
-  elements.calculationProgress.hidden = true;
   elements.explorationToggle.checked = false;
   elements.explorationToggle.disabled = true;
 }
