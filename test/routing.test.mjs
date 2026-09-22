@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { aStar } from "../src/algorithms/AStar.js";
 import { dfs } from "../src/algorithms/DFS.js";
+import { dijkstra } from "../src/algorithms/Dijkstra.js";
 import {
   assembleMultiStopRoute,
   buildPathResult,
@@ -36,6 +37,75 @@ const rawGraph = {
 };
 
 const routingGraph = buildRoutingGraph(rawGraph);
+
+test("Dijkstra encontra a rota de menor peso do exemplo fornecido", async () => {
+  const graph = {
+    nodes: ["Jaraguá", "Anápolis", "Inhumas", "Goiânia"].map((id) => ({ id })),
+    edges: [
+      { from: "Jaraguá", to: "Anápolis", distance_m: 60 },
+      { from: "Jaraguá", to: "Inhumas", distance_m: 75 },
+      { from: "Anápolis", to: "Goiânia", distance_m: 65 },
+      { from: "Inhumas", to: "Goiânia", distance_m: 45 },
+      { from: "Inhumas", to: "Anápolis", distance_m: 40 },
+    ],
+  };
+
+  assert.deepEqual(
+    await dijkstra({ grafo: graph, inicio: "Jaraguá", destino: "Goiânia" }),
+    ["Jaraguá", "Inhumas", "Goiânia"],
+  );
+});
+
+test("Dijkstra usa o tempo estimado como peso no sistema", async () => {
+  const graph = {
+    nodes: [1, 2, 3].map((id) => ({ id })),
+    edges: [
+      { from: 1, to: 3, distance_m: 100, travel_time_s: 100 },
+      { from: 1, to: 2, distance_m: 150, travel_time_s: 10 },
+      { from: 2, to: 3, distance_m: 150, travel_time_s: 10 },
+    ],
+  };
+
+  assert.deepEqual(
+    await dijkstra({ grafo: graph, inicio: 1, destino: 3, cost: "time" }),
+    [1, 2, 3],
+  );
+});
+
+test("Dijkstra registra expansões e aceita cancelamento", async () => {
+  const trace = [];
+  assert.equal(
+    await dijkstra({ grafo: rawGraph, inicio: 1, destino: 5, trace }),
+    null,
+  );
+  assert.ok(trace.some(({ de, para }) => de === 1 && para === 2));
+
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    dijkstra({
+      grafo: rawGraph,
+      inicio: 1,
+      destino: 3,
+      signal: controller.signal,
+    }),
+    (error) => error.name === "AbortError",
+  );
+
+  const runningController = new AbortController();
+  await assert.rejects(
+    dijkstra({
+      grafo: rawGraph,
+      inicio: 1,
+      destino: 3,
+      signal: runningController.signal,
+      yieldEvery: 1,
+      yieldControl: () => Promise.resolve(),
+      onExplore: () => runningController.abort(),
+    }),
+    (error) => error.name === "AbortError",
+  );
+});
 
 test("DFS segue em profundidade e para no primeiro caminho até o destino", async () => {
   const graph = {

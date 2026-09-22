@@ -9,6 +9,7 @@ import {
 import { aStar } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
 import { dfs } from "/algorithms/DFS.js";
+import { dijkstra } from "/algorithms/Dijkstra.js";
 
 const state = {
   graph: null,
@@ -609,6 +610,18 @@ async function calculatePathWithSelectedAlgorithm(
     });
   }
 
+  if (algorithm === "dijkstra") {
+    return dijkstra({
+      ...parameters,
+      cost: "time",
+      signal,
+      onExplore: ({ de, para }) =>
+        recordExplorationProgress(routingGraph, de, para, algorithm),
+      yieldControl: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      yieldEvery: 64,
+    });
+  }
+
   const markers = createBfsVisualizationMarkers(
     graph,
     inicio,
@@ -881,6 +894,7 @@ function getAlgorithmLabel(value) {
     astar: "A*",
     bfs: "BFS",
     dfs: "DFS",
+    dijkstra: "Dijkstra",
   }[value] || value;
 }
 
