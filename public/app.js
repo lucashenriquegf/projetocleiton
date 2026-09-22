@@ -8,6 +8,7 @@ import {
 } from "/algorithms/routing.mjs";
 import { aStar } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
+import { dfs } from "/algorithms/DFS.js";
 
 const state = {
   graph: null,
@@ -16,12 +17,19 @@ const state = {
   networkLayer: null,
   stops: [],
   routeLayers: [],
+  explorationGroup: null,
+  exploredEdgeKeys: new Set(),
+  activeExplorationLayer: null,
+  explorationStepCount: 0,
+  searchPairIndex: 0,
+  searchPairTotal: 0,
+  currentCalculationController: null,
   addMode: null,
   dragDepth: 0,
   counters: { pickup: 0, delivery: 0 },
   toastTimer: null,
   lastRoute: null,
-  editingStopId: null,
+  editingDeliveryId: null,
 };
 
 const elements = {
@@ -33,7 +41,9 @@ const elements = {
   orderHint: document.querySelector("#order-hint"),
   clearRoute: document.querySelector("#clear-route"),
   calculateRoute: document.querySelector("#calculate-route"),
+  cancelCalculation: document.querySelector("#cancel-calculation"),
   calculationNote: document.querySelector("#calculation-note"),
+  calculationProgress: document.querySelector("#calculation-progress"),
   algorithm: document.querySelector("#algorithm"),
   averageSpeed: document.querySelector("#average-speed"),
   speedValue: document.querySelector("#speed-value"),
@@ -46,6 +56,7 @@ const elements = {
   selectedAlgorithm: document.querySelector("#selected-algorithm"),
   segmentList: document.querySelector("#segment-list"),
   networkToggle: document.querySelector("#network-toggle"),
+  explorationToggle: document.querySelector("#exploration-toggle"),
   mapInstruction: document.querySelector("#map-instruction"),
   instructionText: document.querySelector("#instruction-text"),
   cancelAdd: document.querySelector("#cancel-add"),
@@ -54,11 +65,9 @@ const elements = {
   deliveryDialog: document.querySelector("#delivery-dialog"),
   deliveryForm: document.querySelector("#delivery-form"),
   deliveryDialogTitle: document.querySelector("#delivery-dialog-title"),
-  stopDialogDescription: document.querySelector("#stop-dialog-description"),
-  deadlineField: document.querySelector("#deadline-field"),
-  deliveryDeadline: document.querySelector("#delivery-deadline"),
-  productsEditor: document.querySelector("#products-editor"),
-  addProduct: document.querySelector("#add-product"),
+  deadlineDays: document.querySelector("#deadline-days"),
+  deadlineHours: document.querySelector("#deadline-hours"),
+  deadlineMinutes: document.querySelector("#deadline-minutes"),
   closeDeliveryDialog: document.querySelector("#close-delivery-dialog"),
   cancelDelivery: document.querySelector("#cancel-delivery"),
 };
@@ -92,6 +101,9 @@ async function initialize() {
 
 function initializeMap() {
   state.map = L.map("map", { zoomControl: false, preferCanvas: true }).setView([-16.36, -49.5], 13);
+  state.map.createPane("explorationPane").style.zIndex = 410;
+  state.map.createPane("routePane").style.zIndex = 420;
+  state.explorationGroup = L.layerGroup();
 
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 19,
@@ -147,18 +159,21 @@ function bindInterfaceEvents() {
   elements.cancelAdd.addEventListener("click", () => setAddMode(null));
   elements.clearRoute.addEventListener("click", clearAllStops);
   elements.calculateRoute.addEventListener("click", calculateRoute);
+  elements.cancelCalculation.addEventListener("click", cancelCalculation);
   elements.algorithm.addEventListener("change", invalidateRoute);
   elements.averageSpeed.addEventListener("input", () => {
     elements.speedValue.textContent = elements.averageSpeed.value;
     invalidateRoute();
   });
   elements.networkToggle.addEventListener("change", toggleNetworkLayer);
-  elements.addProduct.addEventListener("click", () => addProductEditorRow());
-  elements.deliveryForm.addEventListener("submit", saveStopDetails);
-  elements.closeDeliveryDialog.addEventListener("click", closeStopEditor);
-  elements.cancelDelivery.addEventListener("click", closeStopEditor);
+  elements.explorationToggle.addEventListener("change", () => {
+    setExplorationVisibility(elements.explorationToggle.checked);
+  });
+  elements.deliveryForm.addEventListener("submit", saveDeliveryDeadline);
+  elements.closeDeliveryDialog.addEventListener("click", closeDeliveryEditor);
+  elements.cancelDelivery.addEventListener("click", closeDeliveryEditor);
   elements.deliveryDialog.addEventListener("close", () => {
-    state.editingStopId = null;
+    state.editingDeliveryId = null;
   });
 }
 
@@ -206,7 +221,6 @@ function addStop(type, latlng) {
     longitude: edge.longitude,
     marker: null,
     deadline: type === "delivery" ? "" : null,
-    products: [],
   };
 
   stop.marker = createStopMarker(stop);
@@ -215,7 +229,7 @@ function addStop(type, latlng) {
   renderStops();
   showToast(`${stop.name} conectada à rede viária.`);
 
-  openStopEditor(stop.id);
+  if (type === "delivery") openDeliveryEditor(stop.id);
 }
 
 function createStopMarker(stop) {
@@ -258,27 +272,25 @@ function createStopIcon(stop, index) {
 
 function createPopupContent(stop) {
   const coordinates = `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}`;
-  const productDetails = isStopConfigured(stop)
-    ? `<span>${escapeHtml(summarizeProducts(stop.products))}</span>`
+  const deadlineDetails = stop.type === "delivery" && isDeliveryConfigured(stop)
+    ? `<span>Prazo: ${escapeHtml(formatDeadline(stop.deadline))}</span><span>Restante: ${escapeHtml(formatRemainingTime(stop.deadline))}</span>`
     : "";
-  const deadlineDetails = stop.type === "delivery" && isStopConfigured(stop)
-    ? `<span>Prazo: ${escapeHtml(formatDeadline(stop.deadline))}</span>`
-    : "";
-  return `<div class="stop-popup"><strong>${escapeHtml(stop.name)}</strong><span>${escapeHtml(stop.roadName)}</span>${deadlineDetails}${productDetails}<span>${coordinates}</span></div>`;
+  return `<div class="stop-popup"><strong>${escapeHtml(stop.name)}</strong><span>${escapeHtml(stop.roadName)}</span>${deadlineDetails}<span>${coordinates}</span></div>`;
 }
 
 function renderStops() {
   elements.stopCount.textContent = state.stops.length;
   elements.emptyStops.hidden = state.stops.length > 0;
   elements.orderHint.hidden = state.stops.length < 2;
-  elements.clearRoute.disabled = state.stops.length === 0;
+  const isCalculating = Boolean(state.currentCalculationController);
+  elements.clearRoute.disabled = isCalculating || state.stops.length === 0;
 
   const pickupCount = state.stops.filter((stop) => stop.type === "pickup").length;
   const deliveries = state.stops.filter((stop) => stop.type === "delivery");
   const deliveryCount = deliveries.length;
-  const incompleteStops = state.stops.filter((stop) => !isStopConfigured(stop)).length;
-  elements.calculateRoute.disabled = pickupCount === 0 || deliveryCount === 0 || incompleteStops > 0;
-  elements.calculationNote.textContent = getCalculationNote(pickupCount, deliveryCount, incompleteStops);
+  const incompleteDeliveries = deliveries.filter((stop) => !isDeliveryConfigured(stop)).length;
+  elements.calculateRoute.disabled = isCalculating || pickupCount === 0 || deliveryCount === 0 || incompleteDeliveries > 0;
+  elements.calculationNote.textContent = getCalculationNote(pickupCount, deliveryCount, incompleteDeliveries);
 
   elements.stopList.innerHTML = "";
   state.stops.forEach((stop, index) => {
@@ -288,19 +300,17 @@ function renderStops() {
     const item = document.createElement("li");
     item.className = `stop-item ${stop.type}`;
     item.dataset.stopId = stop.id;
-    const configured = isStopConfigured(stop);
-    const stopDetails = configured
-      ? stop.type === "delivery"
-        ? `Prazo ${formatDeadline(stop.deadline)} · ${summarizeProducts(stop.products)}`
-        : summarizeProducts(stop.products)
-      : stop.type === "delivery"
-        ? "Informe o prazo e os produtos"
-        : "Informe os produtos da coleta";
+    const configured = stop.type === "pickup" || isDeliveryConfigured(stop);
+    const stopDetails = stop.type === "delivery"
+      ? configured
+        ? `Prazo em ${formatRemainingTime(stop.deadline)}`
+        : "Informe o prazo da entrega"
+      : stop.roadName;
     item.innerHTML = `
       <span class="stop-sequence">${index + 1}</span>
       <span class="stop-copy"><strong>${escapeHtml(stop.name)}</strong><small class="${configured ? "" : "pending-details"}">${escapeHtml(stopDetails)}</small></span>
       <span class="stop-actions">
-        <button class="edit-delivery" type="button" aria-label="Editar ${escapeHtml(stop.name)}">Detalhes</button>
+        ${stop.type === "delivery" ? `<button class="edit-delivery" type="button" aria-label="Editar ${escapeHtml(stop.name)}">Prazo</button>` : ""}
         <button class="remove-stop" type="button" aria-label="Remover ${escapeHtml(stop.name)}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
@@ -311,100 +321,67 @@ function renderStops() {
       state.map.flyTo([stop.latitude, stop.longitude], Math.max(state.map.getZoom(), 16));
       stop.marker.openPopup();
     });
-    item.querySelector(".edit-delivery").addEventListener("click", () => openStopEditor(stop.id));
+    item.querySelector(".edit-delivery")?.addEventListener("click", () => openDeliveryEditor(stop.id));
     item.querySelector(".remove-stop").addEventListener("click", () => removeStop(stop.id));
     elements.stopList.appendChild(item);
   });
 }
 
-function getCalculationNote(pickups, deliveries, incompleteStops = 0) {
+function getCalculationNote(pickups, deliveries, incompleteDeliveries = 0) {
   if (!pickups && !deliveries) return "Adicione os pontos para começar";
   if (!pickups) return "Adicione ao menos um ponto de coleta";
   if (!deliveries) return "Adicione ao menos um ponto de entrega";
-  if (incompleteStops) {
-    return `Preencha os dados de ${incompleteStops} ${pluralize(incompleteStops, "ponto", "pontos")}`;
+  if (incompleteDeliveries) {
+    return `Preencha o prazo de ${incompleteDeliveries} ${pluralize(incompleteDeliveries, "entrega", "entregas")}`;
   }
   return `${pickups} ${pluralize(pickups, "coleta", "coletas")} • ${deliveries} ${pluralize(deliveries, "entrega", "entregas")}`;
 }
 
-function openStopEditor(stopId) {
-  const stop = state.stops.find((candidate) => candidate.id === stopId);
+function openDeliveryEditor(stopId) {
+  const stop = state.stops.find((candidate) => candidate.id === stopId && candidate.type === "delivery");
   if (!stop) return;
 
-  state.editingStopId = stop.id;
+  state.editingDeliveryId = stop.id;
   elements.deliveryDialogTitle.textContent = stop.name;
-  elements.stopDialogDescription.textContent = stop.type === "delivery"
-    ? "Informe o prazo e os produtos deste ponto."
-    : "Informe os produtos e quantidades desta coleta.";
-  elements.deadlineField.hidden = stop.type !== "delivery";
-  elements.deliveryDeadline.required = stop.type === "delivery";
-  elements.deliveryDeadline.value = stop.deadline || "";
-  elements.productsEditor.innerHTML = "";
-  (stop.products?.length ? stop.products : [{ name: "", quantity: 1 }])
-    .forEach((product) => addProductEditorRow(product));
+  const remaining = getRemainingDeadlineParts(stop.deadline);
+  elements.deadlineDays.value = remaining.days;
+  elements.deadlineHours.value = remaining.hours;
+  elements.deadlineMinutes.value = remaining.minutes;
   elements.deliveryDialog.showModal();
 }
 
-function closeStopEditor() {
+function closeDeliveryEditor() {
   if (elements.deliveryDialog.open) elements.deliveryDialog.close();
-  state.editingStopId = null;
+  state.editingDeliveryId = null;
 }
 
-function addProductEditorRow(product = { name: "", quantity: 1 }) {
-  const row = document.createElement("div");
-  row.className = "product-row";
-  row.innerHTML = `
-    <input class="product-name" type="text" value="${escapeHtml(product.name || "")}" placeholder="Produto" aria-label="Produto" required />
-    <input class="product-quantity" type="number" value="${Number(product.quantity) || 1}" min="0.01" step="0.01" aria-label="Quantidade" required />
-    <button class="remove-product" type="button" aria-label="Remover produto">×</button>`;
-  row.querySelector(".remove-product").addEventListener("click", () => {
-    if (elements.productsEditor.children.length === 1) {
-      row.querySelector(".product-name").value = "";
-      row.querySelector(".product-quantity").value = "1";
-      return;
-    }
-    row.remove();
-  });
-  elements.productsEditor.appendChild(row);
-}
-
-function saveStopDetails(event) {
+function saveDeliveryDeadline(event) {
   event.preventDefault();
-  const stop = state.stops.find((candidate) => candidate.id === state.editingStopId);
+  const stop = state.stops.find((candidate) => candidate.id === state.editingDeliveryId);
   if (!stop) return;
 
-  const products = [...elements.productsEditor.querySelectorAll(".product-row")].map((row) => ({
-    name: row.querySelector(".product-name").value.trim(),
-    quantity: Number(row.querySelector(".product-quantity").value),
-  }));
+  const days = Number(elements.deadlineDays.value);
+  const hours = Number(elements.deadlineHours.value);
+  const minutes = Number(elements.deadlineMinutes.value);
+  const validParts = [days, hours, minutes].every(Number.isInteger) &&
+    days >= 0 && hours >= 0 && hours <= 23 && minutes >= 0 && minutes <= 59;
+  const totalMinutes = days * 24 * 60 + hours * 60 + minutes;
 
-  const missingDeadline = stop.type === "delivery" && !elements.deliveryDeadline.value;
-  if (missingDeadline || products.some((product) => !product.name || !(product.quantity > 0))) {
-    showToast(
-      stop.type === "delivery"
-        ? "Informe o prazo, os produtos e quantidades válidas."
-        : "Informe os produtos e quantidades válidas.",
-      true,
-    );
+  if (!validParts || totalMinutes <= 0) {
+    showToast("Informe um prazo maior que zero.", true);
     return;
   }
 
-  stop.deadline = stop.type === "delivery" ? elements.deliveryDeadline.value : null;
-  stop.products = products;
+  stop.deadline = new Date(Date.now() + totalMinutes * 60_000).toISOString();
   stop.marker.setPopupContent(createPopupContent(stop));
   invalidateRoute();
-  closeStopEditor();
+  closeDeliveryEditor();
   renderStops();
   showToast(`${stop.name} atualizada.`);
 }
 
-function isStopConfigured(stop) {
-  const validProducts = Array.isArray(stop.products) &&
-    stop.products.length > 0 &&
-    stop.products.every((product) => product.name?.trim() && Number(product.quantity) > 0);
-  return validProducts && (
-    stop.type === "pickup" || Number.isFinite(Date.parse(stop.deadline))
-  );
+function isDeliveryConfigured(stop) {
+  return stop.type === "delivery" && Number.isFinite(Date.parse(stop.deadline));
 }
 
 function removeStop(stopId) {
@@ -427,28 +404,52 @@ function clearAllStops() {
 
 function invalidateRoute() {
   clearRouteLayers();
+  clearExploration();
   state.lastRoute = null;
   elements.routeSummary.hidden = true;
   elements.calculateRoute.querySelector("span").textContent = "Calcular rota";
 }
 
+function cancelCalculation() {
+  const controller = state.currentCalculationController;
+  if (!controller || controller.signal.aborted) return;
+
+  controller.abort();
+  elements.cancelCalculation.disabled = true;
+  elements.cancelCalculation.textContent = "Cancelando…";
+  elements.calculationProgress.querySelector("span").textContent = "Cancelando cálculo…";
+}
+
 async function calculateRoute() {
+  if (state.currentCalculationController) return;
+
   const pickups = state.stops.filter((stop) => stop.type === "pickup");
   const deliveries = state.stops.filter((stop) => stop.type === "delivery");
   if (!pickups.length || !deliveries.length) {
     showToast("Adicione ao menos uma coleta e uma entrega.", true);
     return;
   }
-  const incompleteStop = state.stops.find((stop) => !isStopConfigured(stop));
-  if (incompleteStop) {
-    openStopEditor(incompleteStop.id);
-    showToast("Preencha os dados de todos os pontos.", true);
+  const incompleteDelivery = deliveries.find((stop) => !isDeliveryConfigured(stop));
+  if (incompleteDelivery) {
+    openDeliveryEditor(incompleteDelivery.id);
+    showToast("Preencha o prazo de todas as entregas.", true);
     return;
   }
 
+  clearExploration();
+  const calculationController = new AbortController();
+  state.currentCalculationController = calculationController;
   elements.calculateRoute.classList.add("loading");
   elements.calculateRoute.disabled = true;
   elements.calculateRoute.querySelector("span").textContent = "Calculando";
+  elements.cancelCalculation.hidden = false;
+  elements.cancelCalculation.disabled = false;
+  elements.cancelCalculation.textContent = "Cancelar";
+  elements.calculationProgress.hidden = false;
+  elements.calculationProgress.querySelector("span").textContent = "Preparando buscas…";
+  elements.algorithm.disabled = true;
+  elements.averageSpeed.disabled = true;
+  elements.clearRoute.disabled = true;
   await new Promise((resolve) => requestAnimationFrame(resolve));
 
   const algorithm = elements.algorithm.value;
@@ -465,32 +466,50 @@ async function calculateRoute() {
     const calculationRoutingGraph = buildRoutingGraph(calculationGraph, {
       fallbackSpeedKph: Number(elements.averageSpeed.value),
     });
-    const planningRoutes = calculatePlanningRoutes(
+    setExplorationVisibility(true);
+    const planningRoutes = await calculatePlanningRoutes(
+      algorithm,
       calculationGraph,
       calculationRoutingGraph,
       connected.stops,
+      calculationController.signal,
     );
     plannedStops = optimizeStopOrder(
       connected.stops,
       (from, to) => planningRoutes.get(routeKey(from, to))?.travelTimeSeconds ?? Infinity,
       departureTimeMs,
     );
-    result = await calculateSelectedAlgorithmRoute(
-      algorithm,
+    result = calculateSelectedAlgorithmRoute(
       plannedStops,
-      calculationGraph,
-      calculationRoutingGraph,
       planningRoutes,
     );
   } catch (error) {
-    console.error(error);
-    showToast("Ocorreu um erro durante o cálculo.", true);
-    result = { error: error.message };
+    if (error.name === "AbortError") {
+      result = { cancelled: true };
+    } else {
+      console.error(error);
+      showToast("Ocorreu um erro durante o cálculo.", true);
+      result = { error: error.message };
+    }
   }
 
   const computationTimeMs = performance.now() - startedAt;
+  state.currentCalculationController = null;
   elements.calculateRoute.classList.remove("loading");
   elements.calculateRoute.disabled = false;
+  elements.cancelCalculation.hidden = true;
+  elements.cancelCalculation.disabled = false;
+  elements.cancelCalculation.textContent = "Cancelar";
+  elements.algorithm.disabled = false;
+  elements.averageSpeed.disabled = false;
+  elements.clearRoute.disabled = state.stops.length === 0;
+  finishExploration();
+
+  if (result.cancelled) {
+    elements.calculateRoute.querySelector("span").textContent = "Calcular rota";
+    showToast("Cálculo cancelado.");
+    return;
+  }
 
   if (result.error) {
     elements.calculateRoute.querySelector("span").textContent = "Calcular rota";
@@ -515,20 +534,39 @@ async function calculateRoute() {
   showToast("Rota calculada.");
 }
 
-function calculatePlanningRoutes(graph, routingGraph, stops) {
+async function calculatePlanningRoutes(
+  algorithm,
+  graph,
+  routingGraph,
+  stops,
+  signal,
+) {
   const routes = new Map();
+  const searches = [];
 
   for (const from of stops) {
     for (const to of stops) {
-      if (from === to) continue;
-      const nodeIds = aStar({
-        grafo: graph,
-        inicio: from.nodeId,
-        destino: to.nodeId,
-        cost: "time",
-      });
-      routes.set(routeKey(from, to), buildPathResult(routingGraph, nodeIds));
+      if (from === to || (from.type === "delivery" && to.type === "pickup")) continue;
+      searches.push({ from, to });
     }
+  }
+
+  state.searchPairTotal = searches.length;
+  for (let index = 0; index < searches.length; index += 1) {
+    throwIfCalculationCancelled(signal);
+    const { from, to } = searches[index];
+    state.searchPairIndex = index + 1;
+    updateCalculationProgress(algorithm);
+    const nodeIds = await calculatePathWithSelectedAlgorithm(
+      algorithm,
+      graph,
+      routingGraph,
+      from.nodeId,
+      to.nodeId,
+      signal,
+    );
+    routes.set(routeKey(from, to), buildPathResult(routingGraph, nodeIds));
+    await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
   return routes;
@@ -538,29 +576,59 @@ function routeKey(from, to) {
   return `${from.id}\u0000${to.id}`;
 }
 
-async function calculateSelectedAlgorithmRoute(
+async function calculatePathWithSelectedAlgorithm(
   algorithm,
-  stops,
   graph,
   routingGraph,
-  planningRoutes,
+  inicio,
+  destino,
+  signal,
 ) {
+  throwIfCalculationCancelled(signal);
+  const parameters = { grafo: graph, inicio, destino };
+
+  if (algorithm === "astar") {
+    const trace = [];
+    const nodeIds = aStar({ ...parameters, cost: "time", trace });
+    trace.forEach(({ from, to }) => {
+      throwIfCalculationCancelled(signal);
+      recordExplorationProgress(routingGraph, from, to, algorithm);
+    });
+    return nodeIds;
+  }
+
+  if (algorithm === "dfs") {
+    return dfs({
+      ...parameters,
+      cost: "time",
+      signal,
+      onExplore: ({ de, para }) =>
+        recordExplorationProgress(routingGraph, de, para, algorithm),
+      yieldControl: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      yieldEvery: 64,
+    });
+  }
+
+  const markers = createBfsVisualizationMarkers(
+    graph,
+    inicio,
+    destino,
+    routingGraph,
+    signal,
+    algorithm,
+  );
+  const nodeIds = await bfs({ ...parameters, markers, velocidade: 0 });
+  throwIfCalculationCancelled(signal);
+  return nodeIds;
+}
+
+function calculateSelectedAlgorithmRoute(stops, planningRoutes) {
   const pathResults = [];
 
   for (let index = 0; index < stops.length - 1; index += 1) {
-    if (algorithm === "astar") {
-      pathResults.push(planningRoutes.get(routeKey(stops[index], stops[index + 1])));
-      continue;
-    }
-
-    const parameters = {
-      grafo: graph,
-      inicio: stops[index].nodeId,
-      destino: stops[index + 1].nodeId,
-    };
-    const nodeIds = await bfs({ ...parameters, markers: new Map(), velocidade: 0 });
-
-    pathResults.push(buildPathResult(routingGraph, nodeIds));
+    pathResults.push(
+      planningRoutes.get(routeKey(stops[index], stops[index + 1])) ?? null,
+    );
   }
 
   return assembleMultiStopRoute(stops, pathResults);
@@ -571,8 +639,8 @@ function drawRoute(result) {
   const latlngs = result.coordinates;
   if (latlngs.length < 2) return;
 
-  const casing = L.polyline(latlngs, { color: "#fff", weight: 9, opacity: .94, lineJoin: "round", interactive: false }).addTo(state.map);
-  const route = L.polyline(latlngs, { color: "#176b43", weight: 5, opacity: 1, lineJoin: "round" }).addTo(state.map);
+  const casing = L.polyline(latlngs, { pane: "routePane", color: "#fff", weight: 9, opacity: .94, lineJoin: "round", interactive: false }).addTo(state.map);
+  const route = L.polyline(latlngs, { pane: "routePane", color: "#176b43", weight: 5, opacity: 1, lineJoin: "round" }).addTo(state.map);
   state.routeLayers.push(casing, route);
   state.stops.forEach((stop) => stop.marker.setZIndexOffset(1000));
   state.map.fitBounds(route.getBounds(), { padding: [55, 55], maxZoom: 16 });
@@ -610,6 +678,156 @@ function renderRouteSummary(result, scrollToSummary = true) {
 function clearRouteLayers() {
   state.routeLayers.forEach((layer) => layer.remove());
   state.routeLayers = [];
+}
+
+function createBfsVisualizationMarkers(
+  graph,
+  startNode,
+  targetNode,
+  routingGraph,
+  signal,
+  algorithm,
+) {
+  const predecessors = buildBfsPredecessors(graph, startNode, targetNode);
+  const markers = new Map();
+
+  for (const [node, predecessor] of predecessors) {
+    markers.set(node, {
+      setStyle: () => {
+        throwIfCalculationCancelled(signal);
+        recordExplorationProgress(routingGraph, predecessor, node, algorithm);
+      },
+    });
+  }
+
+  return markers;
+}
+
+function buildBfsPredecessors(graph, startNode, targetNode) {
+  const adjacency = new Map(graph.nodes.map((node) => [node.id, []]));
+  for (const edge of graph.edges) {
+    if (adjacency.has(edge.from) && adjacency.has(edge.to)) {
+      adjacency.get(edge.from).push(edge.to);
+    }
+  }
+
+  const queue = [startNode];
+  const visited = new Set([startNode]);
+  const predecessors = new Map();
+
+  for (let index = 0; index < queue.length; index += 1) {
+    const current = queue[index];
+    if (current === targetNode) break;
+
+    for (const neighbor of adjacency.get(current) || []) {
+      if (visited.has(neighbor)) continue;
+      visited.add(neighbor);
+      predecessors.set(neighbor, current);
+      queue.push(neighbor);
+    }
+  }
+
+  return predecessors;
+}
+
+function recordExploredEdge(routingGraph, from, to) {
+  if (from === undefined || to === undefined) return;
+  const candidates = (routingGraph.adjacency.get(from) || [])
+    .filter((edge) => edge.to === to);
+  if (!candidates.length) return;
+
+  const edge = candidates.reduce((best, candidate) =>
+    candidate.travelTimeSeconds < best.travelTimeSeconds ? candidate : best,
+  );
+  const key = `${String(from)}\u0000${String(to)}\u0000${edge.edgeIndex}`;
+  if (!state.exploredEdgeKeys.has(key)) {
+    state.exploredEdgeKeys.add(key);
+    L.polyline(edge.geometry, {
+      pane: "explorationPane",
+      color: "#e0a400",
+      weight: 4,
+      opacity: .72,
+      lineJoin: "round",
+      interactive: false,
+    }).addTo(state.explorationGroup);
+  }
+
+  if (!state.activeExplorationLayer) {
+    state.activeExplorationLayer = L.polyline(edge.geometry, {
+      pane: "explorationPane",
+      color: "#f26b21",
+      weight: 7,
+      opacity: .95,
+      dashArray: "10 8",
+      lineJoin: "round",
+      interactive: false,
+    }).addTo(state.explorationGroup);
+  } else {
+    state.activeExplorationLayer.setLatLngs(edge.geometry);
+  }
+  state.activeExplorationLayer.bringToFront();
+}
+
+function recordExplorationProgress(routingGraph, from, to, algorithm) {
+  state.explorationStepCount += 1;
+  recordExploredEdge(routingGraph, from, to);
+
+  if (
+    state.explorationStepCount === 1 ||
+    state.explorationStepCount % 25 === 0
+  ) {
+    updateCalculationProgress(algorithm);
+  }
+}
+
+function updateCalculationProgress(algorithm) {
+  const pair = state.searchPairTotal
+    ? `trecho ${state.searchPairIndex}/${state.searchPairTotal}`
+    : "preparando trechos";
+  const expansions = state.explorationStepCount.toLocaleString("pt-BR");
+  elements.calculationProgress.querySelector("span").textContent =
+    `${getAlgorithmLabel(algorithm)} · ${pair} · ${expansions} expansões`;
+}
+
+function throwIfCalculationCancelled(signal) {
+  if (!signal?.aborted) return;
+  const error = new Error("Cálculo cancelado.");
+  error.name = "AbortError";
+  throw error;
+}
+
+function setExplorationVisibility(visible) {
+  if (!state.explorationGroup) return;
+  if (visible) {
+    state.explorationGroup.addTo(state.map);
+  } else {
+    state.explorationGroup.remove();
+  }
+}
+
+function finishExploration() {
+  if (state.activeExplorationLayer) {
+    state.explorationGroup.removeLayer(state.activeExplorationLayer);
+  }
+  state.activeExplorationLayer = null;
+  elements.calculationProgress.hidden = true;
+  setExplorationVisibility(false);
+  elements.explorationToggle.checked = false;
+  elements.explorationToggle.disabled = state.exploredEdgeKeys.size === 0;
+}
+
+function clearExploration() {
+  if (!state.explorationGroup) return;
+  state.explorationGroup.remove();
+  state.explorationGroup.clearLayers();
+  state.exploredEdgeKeys.clear();
+  state.activeExplorationLayer = null;
+  state.explorationStepCount = 0;
+  state.searchPairIndex = 0;
+  state.searchPairTotal = 0;
+  elements.calculationProgress.hidden = true;
+  elements.explorationToggle.checked = false;
+  elements.explorationToggle.disabled = true;
 }
 
 function toggleNetworkLayer() {
@@ -662,11 +880,33 @@ function getAlgorithmLabel(value) {
   return {
     astar: "A*",
     bfs: "BFS",
+    dfs: "DFS",
   }[value] || value;
 }
 
-function summarizeProducts(products) {
-  return products.map((product) => `${product.name} × ${product.quantity.toLocaleString("pt-BR")}`).join(", ");
+function getRemainingDeadlineParts(value) {
+  const deadline = Date.parse(value);
+  if (!Number.isFinite(deadline)) return { days: 0, hours: 0, minutes: 0 };
+
+  const totalMinutes = Math.max(0, Math.ceil((deadline - Date.now()) / 60_000));
+  return {
+    days: Math.floor(totalMinutes / (24 * 60)),
+    hours: Math.floor((totalMinutes % (24 * 60)) / 60),
+    minutes: totalMinutes % 60,
+  };
+}
+
+function formatRemainingTime(value) {
+  const deadline = Date.parse(value);
+  if (!Number.isFinite(deadline)) return "prazo inválido";
+  if (deadline <= Date.now()) return "vencido";
+
+  const { days, hours, minutes } = getRemainingDeadlineParts(value);
+  return [
+    days ? `${days}d` : "",
+    hours ? `${hours}h` : "",
+    minutes || (!days && !hours) ? `${minutes}min` : "",
+  ].filter(Boolean).join(" ");
 }
 
 function formatDeadline(value) {

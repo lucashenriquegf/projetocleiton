@@ -77,7 +77,7 @@ class PriorityQueue {
   }
 }
 
-export function aStar({ grafo, inicio, destino, cost = "distance" }) {
+export function aStar({ grafo, inicio, destino, cost = "distance", trace = null }) {
   const { nodes, adjacency, maxSpeedKph } = prepareGraph(grafo, cost);
 
   if (!nodes.has(inicio) || !nodes.has(destino)) {
@@ -109,6 +109,10 @@ export function aStar({ grafo, inicio, destino, cost = "distance" }) {
     // antigas quando já foi encontrado um custo melhor para o nó.
     if (item.fScore !== fScore.get(node)) {
       continue;
+    }
+
+    if (node !== inicio && trace) {
+      trace.push({ from: path.get(node), to: node });
     }
 
     if (node === destino) {

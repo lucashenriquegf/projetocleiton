@@ -85,7 +85,7 @@ export function findNearestEdge(routingGraph, latitude, longitude) {
 export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}) {
   const baseRoutingGraph = buildRoutingGraph(graph, { fallbackSpeedKph });
   const augmentedNodes = graph.nodes.map((node) => ({ ...node }));
-  const augmentedEdges = graph.edges.map((edge) => ({ ...edge }));
+  const augmentedEdges = [];
   const attachmentsByEdge = new Map();
 
   const connectedStops = stops.map((stop) => {
@@ -138,6 +138,12 @@ export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}
     }
 
     return connectedStop;
+  });
+
+  graph.edges.forEach((edge, edgeIndex) => {
+    if (!attachmentsByEdge.has(edgeIndex)) {
+      augmentedEdges.push({ ...edge });
+    }
   });
 
   for (const [edgeIndex, attachments] of attachmentsByEdge) {

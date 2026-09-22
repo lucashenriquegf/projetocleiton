@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { aStar } from "../src/algorithms/AStar.js";
+import { dfs } from "../src/algorithms/DFS.js";
 import {
   assembleMultiStopRoute,
   buildPathResult,
@@ -36,6 +37,88 @@ const rawGraph = {
 
 const routingGraph = buildRoutingGraph(rawGraph);
 
+test("DFS segue em profundidade e para no primeiro caminho até o destino", async () => {
+  const graph = {
+    nodes: [1, 2, 3, 4].map((id) => ({ id })),
+    edges: [
+      { from: 1, to: 2, distance_m: 1 },
+      { from: 2, to: 4, distance_m: 10 },
+      { from: 1, to: 3, distance_m: 2 },
+      { from: 3, to: 4, distance_m: 2 },
+    ],
+  };
+
+  assert.deepEqual(
+    await dfs({ grafo: graph, inicio: 1, destino: 4 }),
+    [1, 2, 4],
+  );
+});
+
+test("DFS retorna nulo quando não existe caminho até o destino", async () => {
+  assert.equal(await dfs({ grafo: rawGraph, inicio: 1, destino: 5 }), null);
+});
+
+test("DFS registra as arestas exploradas para visualização", async () => {
+  const trace = [];
+  await dfs({ grafo: rawGraph, inicio: 1, destino: 3, trace });
+
+  assert.ok(trace.some(({ de, para }) => de === 1 && para === 2));
+  assert.ok(trace.some(({ de, para }) => de === 2 && para === 3));
+});
+
+test("DFS não usa a heurística nem o custo do A*", async () => {
+  const graph = {
+    nodes: [
+      { id: 1, latitude: 0, longitude: 0 },
+      { id: 2, latitude: 0, longitude: 0.001 },
+      { id: 3, latitude: 0, longitude: 0.002 },
+    ],
+    edges: [
+      { from: 1, to: 3, distance_m: 100, travel_time_s: 100 },
+      { from: 1, to: 2, distance_m: 150, travel_time_s: 10 },
+      { from: 2, to: 3, distance_m: 150, travel_time_s: 10 },
+    ],
+  };
+
+  const dfsPath = await dfs({
+    grafo: graph,
+    inicio: 1,
+    destino: 3,
+    cost: "time",
+  });
+  const aStarPath = aStar({
+    grafo: graph,
+    inicio: 1,
+    destino: 3,
+    cost: "time",
+  });
+
+  assert.deepEqual(dfsPath, [1, 3]);
+  assert.deepEqual(aStarPath, [1, 2, 3]);
+});
+
+test("DFS pode ser cancelado", async () => {
+  const graph = {
+    nodes: [1, 2, 3].map((id) => ({ id })),
+    edges: [
+      { from: 1, to: 2, distance_m: 1 },
+      { from: 2, to: 3, distance_m: 1 },
+    ],
+  };
+
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(
+    dfs({
+      grafo: graph,
+      inicio: 1,
+      destino: 3,
+      signal: controller.signal,
+    }),
+    (error) => error.name === "AbortError",
+  );
+});
+
 test("A* escolhe o menor caminho usando g_score e h_score", () => {
   const nodeIds = aStar({ grafo: rawGraph, inicio: 1, destino: 3 });
 
@@ -44,6 +127,16 @@ test("A* escolhe o menor caminho usando g_score e h_score", () => {
 
 test("A* retorna nulo quando não existe caminho", () => {
   assert.equal(aStar({ grafo: rawGraph, inicio: 1, destino: 5 }), null);
+});
+
+test("A* registra as arestas expandidas para visualização", () => {
+  const trace = [];
+  aStar({ grafo: rawGraph, inicio: 1, destino: 3, trace });
+
+  assert.deepEqual(trace, [
+    { from: 1, to: 2 },
+    { from: 2, to: 3 },
+  ]);
 });
 
 test("resultado do A* preserva distância, vias e geometria curva", () => {
@@ -106,7 +199,7 @@ test("planejador decide a ordem das coletas e entregas usando tempo e prazo", ()
   );
 });
 
-test("ponto é projetado no meio da aresta e não no cruzamento", () => {
+test("ponto é projetado e conectado no meio da aresta", async () => {
   const streetGraph = {
     nodes: [
       { id: "a", latitude: 0, longitude: 0 },
@@ -128,6 +221,12 @@ test("ponto é projetado no meio da aresta e não no cruzamento", () => {
     { id: "second", name: "Entrega", type: "delivery", latitude: 0, longitude: 0.008, edgeIndex: 0 },
   ]);
   const connectedRoutingGraph = buildRoutingGraph(connected.graph);
+  assert.equal(
+    connected.graph.edges.some((edge) =>
+      edge.from === "a" && edge.to === "b" && !edge.virtual,
+    ),
+    false,
+  );
   const nodeIds = aStar({
     grafo: connected.graph,
     inicio: connected.stops[0].nodeId,
@@ -135,8 +234,14 @@ test("ponto é projetado no meio da aresta e não no cruzamento", () => {
     cost: "time",
   });
   const result = buildPathResult(connectedRoutingGraph, nodeIds);
+  const dfsNodeIds = await dfs({
+    grafo: connected.graph,
+    inicio: connected.stops[0].nodeId,
+    destino: connected.stops[1].nodeId,
+  });
 
   assert.deepEqual(nodeIds, ["stop:first", "stop:second"]);
+  assert.deepEqual(dfsNodeIds, ["stop:first", "stop:second"]);
   assert.ok(Math.abs(result.distanceMeters - 600) < 0.001);
   assert.ok(Math.abs(result.travelTimeSeconds - 43.2) < 0.001);
 });

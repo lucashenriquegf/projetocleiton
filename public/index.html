@@ -48,6 +48,7 @@
           <select id="algorithm">
             <option value="astar">A*</option>
             <option value="bfs">Busca em Largura (BFS)</option>
+            <option value="dfs">Busca em Profundidade (DFS)</option>
           </select>
 
           <label for="average-speed" class="speed-label">
@@ -56,6 +57,11 @@
           </label>
           <input id="average-speed" type="range" min="20" max="80" value="40" step="5" />
           <div class="range-labels"><span>20</span><span>80 km/h</span></div>
+
+          <label class="exploration-option" for="exploration-toggle">
+            <input id="exploration-toggle" type="checkbox" disabled />
+            <span>Mostrar caminhos explorados</span>
+          </label>
         </section>
 
         <section id="route-summary" class="route-summary panel-section" hidden aria-live="polite">
@@ -73,9 +79,12 @@
         </section>
 
         <div class="panel-footer">
-          <button id="calculate-route" class="primary-button" type="button" disabled>
-            <span>Calcular rota</span>
-          </button>
+          <div class="calculation-actions">
+            <button id="calculate-route" class="primary-button" type="button" disabled>
+              <span>Calcular rota</span>
+            </button>
+            <button id="cancel-calculation" class="cancel-calculation" type="button" hidden>Cancelar</button>
+          </div>
           <p id="calculation-note">Adicione uma coleta e uma entrega</p>
         </div>
       </aside>
@@ -91,9 +100,14 @@
           <span id="instruction-text">Clique no mapa para posicionar</span>
           <button id="cancel-add" type="button" aria-label="Cancelar inclusão">×</button>
         </div>
+        <div id="calculation-progress" class="calculation-progress" hidden>
+          <i aria-hidden="true"></i><span>Iniciando busca…</span>
+        </div>
         <div class="map-legend">
           <span><i class="legend-dot pickup"></i>Coleta</span>
           <span><i class="legend-dot delivery"></i>Entrega</span>
+          <span><i class="legend-line final"></i>Rota final</span>
+          <span><i class="legend-line explored"></i>Exploração</span>
         </div>
         <div id="loading-state" class="loading-state">
           <div class="loader"></div><span>Carregando mapa…</span>
@@ -107,26 +121,24 @@
       <form id="delivery-form">
         <div class="dialog-header">
           <div>
-            <h2 id="delivery-dialog-title">Detalhes do ponto</h2>
-            <p id="stop-dialog-description">Informe os produtos e quantidades.</p>
+            <h2 id="delivery-dialog-title">Prazo da entrega</h2>
+            <p>Informe quanto tempo falta até o vencimento.</p>
           </div>
           <button id="close-delivery-dialog" class="dialog-close" type="button" aria-label="Fechar">×</button>
         </div>
 
-        <label id="deadline-field" class="dialog-field" for="delivery-deadline">
-          Prazo limite
-          <input id="delivery-deadline" type="datetime-local" required />
-        </label>
-
-        <div class="products-heading">
-          <span>Produtos</span>
-          <button id="add-product" type="button">+ Adicionar produto</button>
+        <div class="deadline-field">
+          <label>Prazo restante</label>
+          <div class="deadline-parts">
+            <label><input id="deadline-days" type="number" min="0" step="1" value="0" required /><span>Dias</span></label>
+            <label><input id="deadline-hours" type="number" min="0" max="23" step="1" value="0" required /><span>Horas</span></label>
+            <label><input id="deadline-minutes" type="number" min="0" max="59" step="1" value="0" required /><span>Minutos</span></label>
+          </div>
         </div>
-        <div id="products-editor" class="products-editor"></div>
 
         <div class="dialog-actions">
           <button id="cancel-delivery" class="secondary-button" type="button">Cancelar</button>
-          <button class="save-button" type="submit">Salvar ponto</button>
+          <button class="save-button" type="submit">Salvar prazo</button>
         </div>
       </form>
     </dialog>
