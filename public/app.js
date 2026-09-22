@@ -537,7 +537,8 @@ async function calculatePathWithSelectedAlgorithm(
   signal,
 ) {
   throwIfCalculationCancelled(signal);
-  const parameters = { grafo: graph, inicio, destino };
+  const fallbackSpeedKph = Number(elements.averageSpeed?.value) || 40;
+  const parameters = { grafo: graph, inicio, destino, fallbackSpeedKph };
 
   if (algorithm === "astar") {
     return aStarWithProgress({

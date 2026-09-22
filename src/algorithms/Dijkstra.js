@@ -1,3 +1,9 @@
+import {
+  resolveEdgeDistanceMeters,
+  resolveEdgeSpeedKph,
+  resolveEdgeTravelTimeSeconds,
+} from "./routing.mjs";
+
 class Aresta {
   constructor(destino, peso) {
     this.destino = destino;
@@ -116,14 +122,19 @@ export async function dijkstra({
   yieldControl = null,
   yieldEvery = 128,
   signal = null,
+  fallbackSpeedKph = 40,
 }) {
-  const vertices = construirVertices(grafo, cost);
+  const vertices = construirVertices(grafo, cost, { fallbackSpeedKph });
   const origem = vertices.get(inicio);
   const verticeDestino = vertices.get(destino);
 
   if (!origem || !verticeDestino) return null;
 
-  await calcularMenorCaminho(origem, {
+  if (origem === verticeDestino) {
+    return [origem.nome];
+  }
+
+  await calcularMenorCaminho(origem, verticeDestino, {
     trace,
     onExplore,
     yieldControl,
@@ -135,7 +146,7 @@ export async function dijkstra({
   return obterCaminho(verticeDestino).map((vertice) => vertice.nome);
 }
 
-async function calcularMenorCaminho(origem, observacao) {
+async function calcularMenorCaminho(origem, verticeDestino, observacao) {
   origem.distanciaMinima = 0;
   const filaDePrioridade = new FilaDePrioridade();
   filaDePrioridade.adicionar(origem);
@@ -149,6 +160,10 @@ async function calcularMenorCaminho(origem, observacao) {
       const expansao = { de: atual.predecessor.nome, para: atual.nome };
       observacao.trace?.push(expansao);
       observacao.onExplore?.(expansao);
+    }
+
+    if (verticeDestino && atual === verticeDestino) {
+      break;
     }
 
     expansoes += 1;
@@ -189,7 +204,11 @@ function obterCaminho(destino) {
   return caminho;
 }
 
-function construirVertices(grafo, cost) {
+function construirVertices(grafo, cost, { fallbackSpeedKph = 40 } = {}) {
+  const fallback = Number.isFinite(Number(fallbackSpeedKph)) && Number(fallbackSpeedKph) > 0
+    ? Number(fallbackSpeedKph)
+    : 40;
+
   const vertices = new Map(
     grafo.nodes.map((node) => [node.id, new Vertice(node.id)]),
   );
@@ -199,9 +218,13 @@ function construirVertices(grafo, cost) {
     const destino = vertices.get(edge.to);
     if (!origem || !destino) continue;
 
+    const distance = resolveEdgeDistanceMeters(edge, origem, destino);
+    if (!Number.isFinite(distance) || distance < 0) continue;
+
+    const speedKph = resolveEdgeSpeedKph(edge, fallback);
     const peso = cost === "time"
-      ? Number(edge.travel_time_s ?? edge.travel_time)
-      : Number(edge.distance_m);
+      ? resolveEdgeTravelTimeSeconds(edge, distance, speedKph, fallback)
+      : distance;
     if (!Number.isFinite(peso) || peso < 0) continue;
 
     origem.adicionarRota(destino, peso);

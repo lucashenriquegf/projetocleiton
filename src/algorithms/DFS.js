@@ -126,7 +126,10 @@ function buildAdjacency(grafo) {
   for (const edge of grafo.edges) {
     if (!adjacency.has(edge.from) || !adjacency.has(edge.to)) continue;
 
-    const distance = Number(edge.distance_m);
+    const rawDistance = Array.isArray(edge.distance_m ?? edge.distance)
+      ? (edge.distance_m ?? edge.distance)[0]
+      : (edge.distance_m ?? edge.distance);
+    const distance = Number(rawDistance);
     if (!Number.isFinite(distance) || distance < 0) continue;
 
     adjacency.get(edge.from).push({ destino: edge.to });

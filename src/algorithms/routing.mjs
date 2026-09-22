@@ -17,15 +17,12 @@ export function buildRoutingGraph(graph, { fallbackSpeedKph = 40 } = {}) {
     const toNode = nodes.get(edge.to);
     if (!fromNode || !toNode) return;
 
-    const distance = Number(edge.distance_m);
+    const distance = resolveEdgeDistanceMeters(edge, fromNode, toNode);
     if (!Number.isFinite(distance) || distance < 0) return;
 
     const roadName = normalizeRoadName(edge.road_name);
     const speedKph = resolveEdgeSpeedKph(edge, fallbackSpeedKph);
-    const suppliedTravelTime = Number(edge.travel_time_s ?? edge.travel_time);
-    const travelTimeSeconds = Number.isFinite(suppliedTravelTime) && suppliedTravelTime >= 0
-      ? suppliedTravelTime
-      : distance / (speedKph / 3.6);
+    const travelTimeSeconds = resolveEdgeTravelTimeSeconds(edge, distance, speedKph, fallbackSpeedKph);
     const routingEdge = {
       edgeIndex,
       from: edge.from,
@@ -139,9 +136,21 @@ export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}
     return connectedStop;
   });
 
+  const baseEdgesByIndex = new Map(baseRoutingGraph.edges.map((edge) => [edge.edgeIndex, edge]));
+
   graph.edges.forEach((edge, edgeIndex) => {
     if (!attachmentsByEdge.has(edgeIndex)) {
-      augmentedEdges.push({ ...edge });
+      const baseEdge = baseEdgesByIndex.get(edgeIndex);
+      if (baseEdge) {
+        augmentedEdges.push({
+          ...edge,
+          distance_m: baseEdge.distance,
+          speed_kph: baseEdge.speedKph,
+          travel_time_s: baseEdge.travelTimeSeconds,
+        });
+      } else {
+        augmentedEdges.push({ ...edge });
+      }
     }
   });
 
@@ -474,18 +483,40 @@ function deduplicateCoordinates(coordinates) {
   );
 }
 
-function coordinateDistanceMeters(first, second) {
+export function coordinateDistanceMeters(first, second) {
   const latitude1 = toRadians(first[0]);
   const latitude2 = toRadians(second[0]);
   const deltaLatitude = toRadians(second[0] - first[0]);
   const deltaLongitude = toRadians(second[1] - first[1]);
   const haversine = Math.sin(deltaLatitude / 2) ** 2 +
     Math.cos(latitude1) * Math.cos(latitude2) * Math.sin(deltaLongitude / 2) ** 2;
-  return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine));
+  const clampedHaversine = Math.max(0, Math.min(1, haversine));
+  return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(clampedHaversine), Math.sqrt(1 - clampedHaversine));
 }
 
-function resolveEdgeSpeedKph(edge, fallbackSpeedKph) {
-  const suppliedSpeed = Number(edge.speed_kph);
+export function resolveEdgeDistanceMeters(edge, fromNode, toNode) {
+  const rawDistance = Array.isArray(edge.distance_m ?? edge.distance ?? edge.length)
+    ? (edge.distance_m ?? edge.distance ?? edge.length)[0]
+    : (edge.distance_m ?? edge.distance ?? edge.length);
+  const distance = Number(rawDistance);
+  if (Number.isFinite(distance) && distance >= 0) return distance;
+
+  if (fromNode && toNode) {
+    const lat1 = Number(fromNode.latitude);
+    const lon1 = Number(fromNode.longitude);
+    const lat2 = Number(toNode.latitude);
+    const lon2 = Number(toNode.longitude);
+    if (Number.isFinite(lat1) && Number.isFinite(lon1) && Number.isFinite(lat2) && Number.isFinite(lon2)) {
+      return coordinateDistanceMeters([lat1, lon1], [lat2, lon2]);
+    }
+  }
+
+  return null;
+}
+
+export function resolveEdgeSpeedKph(edge, fallbackSpeedKph = 40) {
+  const rawSpeed = Array.isArray(edge.speed_kph) ? edge.speed_kph[0] : edge.speed_kph;
+  const suppliedSpeed = Number(rawSpeed);
   if (Number.isFinite(suppliedSpeed) && suppliedSpeed > 0) return suppliedSpeed;
 
   const values = Array.isArray(edge.max_speed) ? edge.max_speed : [edge.max_speed];
@@ -498,7 +529,27 @@ function resolveEdgeSpeedKph(edge, fallbackSpeedKph) {
     })
     .filter((value) => value !== null);
 
-  return parsedSpeeds.length ? Math.min(...parsedSpeeds) : fallbackSpeedKph;
+  const fallback = Number.isFinite(Number(fallbackSpeedKph)) && Number(fallbackSpeedKph) > 0
+    ? Number(fallbackSpeedKph)
+    : 40;
+  return parsedSpeeds.length ? Math.min(...parsedSpeeds) : fallback;
+}
+
+export function resolveEdgeTravelTimeSeconds(edge, distance, speedKph, fallbackSpeedKph = 40) {
+  const rawTravelTime = Array.isArray(edge.travel_time_s ?? edge.travel_time)
+    ? (edge.travel_time_s ?? edge.travel_time)[0]
+    : (edge.travel_time_s ?? edge.travel_time);
+  const suppliedTravelTime = Number(rawTravelTime);
+
+  const numericDistance = Number(distance);
+  if (Number.isFinite(suppliedTravelTime) && (suppliedTravelTime > 0 || (numericDistance === 0 && suppliedTravelTime >= 0))) {
+    return suppliedTravelTime;
+  }
+
+  const safeSpeed = Number.isFinite(speedKph) && speedKph > 0
+    ? speedKph
+    : resolveEdgeSpeedKph(edge, fallbackSpeedKph);
+  return Math.max(0, numericDistance) / (safeSpeed / 3.6);
 }
 
 function normalizeGeometry(geometry, fromNode, toNode) {

@@ -419,3 +419,105 @@ test("algoritmos preservam o caminho ao mostrar lotes de 128 nós", async () => 
     (error) => error.name === "AbortError",
   );
 });
+
+test("A* e Dijkstra encontram caminho mesmo quando arestas não possuem travel_time_s ou possuem null/arrays", async () => {
+  const graphWithIncompleteEdges = {
+    nodes: [
+      { id: "A", latitude: -16.4, longitude: -49.5 },
+      { id: "B", latitude: -16.4, longitude: -49.499 },
+      { id: "C", latitude: -16.4, longitude: -49.498 },
+      { id: "D", latitude: -16.4, longitude: -49.497 },
+    ],
+    edges: [
+      // Aresta sem travel_time_s (apenas distance_m)
+      { from: "A", to: "B", distance_m: 100 },
+      // Aresta com travel_time_s = null
+      { from: "B", to: "C", distance_m: 100, travel_time_s: null },
+      // Aresta com travel_time_s como array [tempo1, tempo2]
+      { from: "C", to: "D", distance_m: 100, travel_time_s: [10, 15], speed_kph: [36, 40] },
+    ],
+  };
+
+  const aStarRoute = await aStar({
+    grafo: graphWithIncompleteEdges,
+    inicio: "A",
+    destino: "D",
+    cost: "time",
+    fallbackSpeedKph: 36,
+  });
+
+  const dijkstraRoute = await dijkstra({
+    grafo: graphWithIncompleteEdges,
+    inicio: "A",
+    destino: "D",
+    cost: "time",
+    fallbackSpeedKph: 36,
+  });
+
+  assert.deepEqual(aStarRoute, ["A", "B", "C", "D"]);
+  assert.deepEqual(dijkstraRoute, ["A", "B", "C", "D"]);
+});
+
+test("A* e Dijkstra não quebram e não propagam NaN na heurística com arestas com tempos inválidos", async () => {
+  const graphWithMalformed = {
+    nodes: [
+      { id: 1, latitude: -16.68, longitude: -49.25 },
+      { id: 2, latitude: -16.69, longitude: -49.26 },
+      { id: 3, latitude: -16.70, longitude: -49.27 },
+    ],
+    edges: [
+      // Aresta malformada em outra parte do grafo
+      { from: 1, to: 2, distance_m: 50, travel_time_s: NaN, speed_kph: null },
+      { from: 2, to: 3, distance_m: 50, travel_time_s: -5 },
+      // Caminho válido
+      { from: 1, to: 3, distance_m: 80, road_name: "Via Direta" },
+    ],
+  };
+
+  const aStarRoute = await aStar({
+    grafo: graphWithMalformed,
+    inicio: 1,
+    destino: 3,
+    cost: "time",
+  });
+
+  const dijkstraRoute = await dijkstra({
+    grafo: graphWithMalformed,
+    inicio: 1,
+    destino: 3,
+    cost: "time",
+  });
+
+  assert.deepEqual(aStarRoute, [1, 3]);
+  assert.deepEqual(dijkstraRoute, [1, 3]);
+});
+
+test("Dijkstra interrompe busca após alcançar o destino em vez de varrer nós distantes", async () => {
+  const trace = [];
+  const graph = {
+    nodes: [
+      { id: "origem", latitude: 0, longitude: 0 },
+      { id: "destino", latitude: 0, longitude: 0.001 },
+      { id: "distante1", latitude: 1, longitude: 1 },
+      { id: "distante2", latitude: 2, longitude: 2 },
+    ],
+    edges: [
+      { from: "origem", to: "destino", distance_m: 100 },
+      { from: "destino", to: "distante1", distance_m: 50000 },
+      { from: "distante1", to: "distante2", distance_m: 50000 },
+    ],
+  };
+
+  const rota = await dijkstra({
+    grafo: graph,
+    inicio: "origem",
+    destino: "destino",
+    cost: "distance",
+    trace,
+  });
+
+  assert.deepEqual(rota, ["origem", "destino"]);
+  // Não deve ter expandido de 'distante1' para 'distante2'
+  assert.ok(!trace.some(({ de, para }) => de === "distante1" && para === "distante2"));
+});
+

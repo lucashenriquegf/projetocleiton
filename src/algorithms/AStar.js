@@ -1,4 +1,10 @@
-const EARTH_RADIUS_M = 6_371_000;
+import {
+  coordinateDistanceMeters,
+  resolveEdgeDistanceMeters,
+  resolveEdgeSpeedKph,
+  resolveEdgeTravelTimeSeconds,
+} from "./routing.mjs";
+
 const graphCache = new WeakMap();
 
 class PriorityQueue {
@@ -77,8 +83,15 @@ class PriorityQueue {
   }
 }
 
-export function aStar({ grafo, inicio, destino, cost = "distance", trace = null }) {
-  const search = aStarSearch({ grafo, inicio, destino, cost, trace });
+export function aStar({
+  grafo,
+  inicio,
+  destino,
+  cost = "distance",
+  trace = null,
+  fallbackSpeedKph = 40,
+}) {
+  const search = aStarSearch({ grafo, inicio, destino, cost, trace, fallbackSpeedKph });
   let step = search.next();
   while (!step.done) step = search.next();
   return step.value;
@@ -94,8 +107,9 @@ export async function aStarWithProgress({
   yieldControl = null,
   yieldEvery = 128,
   signal = null,
+  fallbackSpeedKph = 40,
 }) {
-  const search = aStarSearch({ grafo, inicio, destino, cost, trace });
+  const search = aStarSearch({ grafo, inicio, destino, cost, trace, fallbackSpeedKph });
   const batchSize = Math.max(1, Number(yieldEvery) || 1);
   let batchCount = 0;
   throwIfCancelled(signal);
@@ -125,15 +139,14 @@ export async function aStarWithProgress({
   return step.value;
 }
 
-function* aStarSearch({ grafo, inicio, destino, cost, trace }) {
-  const { nodes, adjacency, maxSpeedKph } = prepareGraph(grafo, cost);
+function* aStarSearch({ grafo, inicio, destino, cost, trace, fallbackSpeedKph = 40 }) {
+  const { nodes, adjacency, maxSpeedKph } = prepareGraph(grafo, cost, { fallbackSpeedKph });
 
   if (!nodes.has(inicio) || !nodes.has(destino)) {
     return null;
   }
 
-  // Equivalente ao dicionário f_score inicializado com infinito no Python.
-  const fScore = new Map(grafo.nodes.map((node) => [node.id, Infinity]));
+  const fScore = new Map();
   const gScore = new Map();
   const path = new Map();
 
@@ -144,7 +157,7 @@ function* aStarSearch({ grafo, inicio, destino, cost, trace }) {
 
   const queue = new PriorityQueue();
   queue.put({
-    fScore: fScore.get(inicio),
+    fScore: startHScore,
     hScore: startHScore,
     node: inicio,
   });
@@ -177,7 +190,8 @@ function* aStarSearch({ grafo, inicio, destino, cost, trace }) {
       );
       const newFScore = newGScore + neighborHScore;
 
-      if (newFScore < fScore.get(neighbor.node)) {
+      const currentFScore = fScore.get(neighbor.node) ?? Infinity;
+      if (newFScore < currentFScore) {
         fScore.set(neighbor.node, newFScore);
         gScore.set(neighbor.node, newGScore);
         queue.put({
@@ -200,55 +214,62 @@ function throwIfCancelled(signal) {
   throw error;
 }
 
-function prepareGraph(grafo, cost) {
+function prepareGraph(grafo, cost, { fallbackSpeedKph = 40 } = {}) {
+  const fallback = Number.isFinite(Number(fallbackSpeedKph)) && Number(fallbackSpeedKph) > 0
+    ? Number(fallbackSpeedKph)
+    : 40;
+
   if (!graphCache.has(grafo)) graphCache.set(grafo, new Map());
   const cachedByCost = graphCache.get(grafo);
-  if (cachedByCost.has(cost)) return cachedByCost.get(cost);
+  const cacheKey = `${cost}:${fallback}`;
+  if (cachedByCost.has(cacheKey)) return cachedByCost.get(cacheKey);
 
   const nodes = new Map(grafo.nodes.map((node) => [node.id, node]));
   const adjacency = new Map(grafo.nodes.map((node) => [node.id, []]));
-  let maxSpeedKph = 1;
+  let maxSpeedKph = fallback;
 
   for (const edge of grafo.edges) {
-    if (!adjacency.has(edge.from) || !nodes.has(edge.to)) continue;
+    const fromNode = nodes.get(edge.from);
+    const toNode = nodes.get(edge.to);
+    if (!fromNode || !toNode || !adjacency.has(edge.from)) continue;
 
-    const distance = Number(edge.distance_m);
-    const travelTime = Number(edge.travel_time_s ?? edge.travel_time);
+    const distance = resolveEdgeDistanceMeters(edge, fromNode, toNode);
+    if (!Number.isFinite(distance) || distance < 0) continue;
+
+    const speedKph = resolveEdgeSpeedKph(edge, fallback);
+    const travelTime = resolveEdgeTravelTimeSeconds(edge, distance, speedKph, fallback);
     const edgeCost = cost === "time" ? travelTime : distance;
     if (!Number.isFinite(edgeCost) || edgeCost < 0) continue;
 
     adjacency.get(edge.from).push({ node: edge.to, cost: edgeCost });
 
-    if (cost === "time" && travelTime > 0 && distance >= 0) {
-      maxSpeedKph = Math.max(maxSpeedKph, (distance / travelTime) * 3.6);
+    if (Number.isFinite(travelTime) && travelTime > 0 && Number.isFinite(distance) && distance >= 0) {
+      const edgeSpeed = (distance / travelTime) * 3.6;
+      if (Number.isFinite(edgeSpeed) && edgeSpeed > 0) {
+        maxSpeedKph = Math.max(maxSpeedKph, edgeSpeed);
+      }
+    } else if (Number.isFinite(speedKph) && speedKph > 0) {
+      maxSpeedKph = Math.max(maxSpeedKph, speedKph);
     }
   }
 
+  maxSpeedKph = Number.isFinite(maxSpeedKph) && maxSpeedKph > 0 ? maxSpeedKph : fallback;
+
   const prepared = { nodes, adjacency, maxSpeedKph };
-  cachedByCost.set(cost, prepared);
+  cachedByCost.set(cacheKey, prepared);
   return prepared;
 }
 
 function hScore(node, target, cost, maxSpeedKph) {
-  const latitude1 = toRadians(node.latitude);
-  const latitude2 = toRadians(target.latitude);
-  const deltaLatitude = toRadians(target.latitude - node.latitude);
-  const deltaLongitude = toRadians(target.longitude - node.longitude);
-
-  const haversine =
-    Math.sin(deltaLatitude / 2) ** 2 +
-    Math.cos(latitude1) *
-      Math.cos(latitude2) *
-      Math.sin(deltaLongitude / 2) ** 2;
-
-  const distanceMeters = (
-    EARTH_RADIUS_M *
-    2 *
-    Math.atan2(Math.sqrt(haversine), Math.sqrt(1 - haversine))
+  const distanceMeters = coordinateDistanceMeters(
+    [node.latitude, node.longitude],
+    [target.latitude, target.longitude],
   );
 
+  const safeSpeed = Number.isFinite(maxSpeedKph) && maxSpeedKph > 0 ? maxSpeedKph : 40;
+
   return cost === "time"
-    ? distanceMeters / (maxSpeedKph / 3.6)
+    ? distanceMeters / (safeSpeed / 3.6)
     : distanceMeters;
 }
 
