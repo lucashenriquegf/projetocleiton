@@ -7,7 +7,7 @@ import {
   findStopsOnPath,
   prioritizeStopOrder,
 } from "/algorithms/routing.mjs";
-import { aStar } from "/algorithms/AStar.js";
+import { aStarWithProgress } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
 import { dfs } from "/algorithms/DFS.js";
 import { dijkstra } from "/algorithms/Dijkstra.js";
@@ -30,6 +30,8 @@ const state = {
   lastRoute: null,
   editingDeliveryId: null,
 };
+
+const SEARCH_BATCH_SIZE = 128;
 
 const elements = {
   cityName: document.querySelector("#city-name"),
@@ -538,13 +540,15 @@ async function calculatePathWithSelectedAlgorithm(
   const parameters = { grafo: graph, inicio, destino };
 
   if (algorithm === "astar") {
-    const trace = [];
-    const nodeIds = aStar({ ...parameters, cost: "time", trace });
-    trace.forEach(({ from, to }) => {
-      throwIfCalculationCancelled(signal);
-      recordExplorationProgress(routingGraph, from, to);
+    return aStarWithProgress({
+      ...parameters,
+      cost: "time",
+      signal,
+      onExplore: ({ from, to }) =>
+        recordExplorationProgress(routingGraph, from, to),
+      yieldControl: () => yieldExplorationBatch(signal),
+      yieldEvery: SEARCH_BATCH_SIZE,
     });
-    return nodeIds;
   }
 
   if (algorithm === "dfs") {
@@ -554,8 +558,8 @@ async function calculatePathWithSelectedAlgorithm(
       signal,
       onExplore: ({ de, para }) =>
         recordExplorationProgress(routingGraph, de, para),
-      yieldControl: () => new Promise((resolve) => setTimeout(resolve, 0)),
-      yieldEvery: 64,
+      yieldControl: () => yieldExplorationBatch(signal),
+      yieldEvery: SEARCH_BATCH_SIZE,
     });
   }
 
@@ -566,8 +570,8 @@ async function calculatePathWithSelectedAlgorithm(
       signal,
       onExplore: ({ de, para }) =>
         recordExplorationProgress(routingGraph, de, para),
-      yieldControl: () => new Promise((resolve) => setTimeout(resolve, 0)),
-      yieldEvery: 64,
+      yieldControl: () => yieldExplorationBatch(signal),
+      yieldEvery: SEARCH_BATCH_SIZE,
     });
   }
 
@@ -578,9 +582,25 @@ async function calculatePathWithSelectedAlgorithm(
     routingGraph,
     signal,
   );
-  const nodeIds = await bfs({ ...parameters, markers, velocidade: 0 });
+  const nodeIds = await bfs({
+    ...parameters,
+    markers,
+    yieldControl: () => yieldExplorationBatch(signal),
+    yieldEvery: SEARCH_BATCH_SIZE,
+  });
   throwIfCalculationCancelled(signal);
   return nodeIds;
+}
+
+async function yieldExplorationBatch(signal) {
+  await new Promise((resolve) => {
+    if (document.hidden) {
+      setTimeout(resolve, 0);
+    } else {
+      requestAnimationFrame(() => setTimeout(resolve, 0));
+    }
+  });
+  throwIfCalculationCancelled(signal);
 }
 
 async function calculateSelectedAlgorithmRoute(

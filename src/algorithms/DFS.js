@@ -35,6 +35,11 @@ export async function dfs({
     observacao,
   );
 
+  if (observacao.yieldControl && observacao.expansoes % observacao.yieldEvery !== 0) {
+    await observacao.yieldControl();
+    throwIfCancelled(observacao.signal);
+  }
+
   return resultado.caminho ? [...resultado.caminho] : null;
 }
 
@@ -91,8 +96,7 @@ async function reportExpansion(de, para, distanciaAtual, observacao) {
   observacao.expansoes += 1;
   if (
     observacao.yieldControl &&
-    (observacao.expansoes === 1 ||
-      observacao.expansoes % observacao.yieldEvery === 0)
+    observacao.expansoes % observacao.yieldEvery === 0
   ) {
     await observacao.yieldControl();
     throwIfCancelled(observacao.signal);

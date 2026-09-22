@@ -78,6 +78,54 @@ class PriorityQueue {
 }
 
 export function aStar({ grafo, inicio, destino, cost = "distance", trace = null }) {
+  const search = aStarSearch({ grafo, inicio, destino, cost, trace });
+  let step = search.next();
+  while (!step.done) step = search.next();
+  return step.value;
+}
+
+export async function aStarWithProgress({
+  grafo,
+  inicio,
+  destino,
+  cost = "distance",
+  trace = null,
+  onExplore = null,
+  yieldControl = null,
+  yieldEvery = 128,
+  signal = null,
+}) {
+  const search = aStarSearch({ grafo, inicio, destino, cost, trace });
+  const batchSize = Math.max(1, Number(yieldEvery) || 1);
+  let batchCount = 0;
+  throwIfCancelled(signal);
+  let step = search.next();
+
+  while (!step.done) {
+    throwIfCancelled(signal);
+    if (step.value) onExplore?.(step.value);
+    batchCount += 1;
+
+    if (batchCount === batchSize) {
+      if (yieldControl) {
+        await yieldControl();
+        throwIfCancelled(signal);
+      }
+      batchCount = 0;
+    }
+
+    step = search.next();
+  }
+
+  if (batchCount && yieldControl) {
+    await yieldControl();
+    throwIfCancelled(signal);
+  }
+
+  return step.value;
+}
+
+function* aStarSearch({ grafo, inicio, destino, cost, trace }) {
   const { nodes, adjacency, maxSpeedKph } = prepareGraph(grafo, cost);
 
   if (!nodes.has(inicio) || !nodes.has(destino)) {
@@ -111,9 +159,9 @@ export function aStar({ grafo, inicio, destino, cost = "distance", trace = null 
       continue;
     }
 
-    if (node !== inicio && trace) {
-      trace.push({ from: path.get(node), to: node });
-    }
+    const expansion = node === inicio ? null : { from: path.get(node), to: node };
+    if (expansion && trace) trace.push(expansion);
+    yield expansion;
 
     if (node === destino) {
       return reconstructPath(path, inicio, destino);
@@ -143,6 +191,13 @@ export function aStar({ grafo, inicio, destino, cost = "distance", trace = null 
   }
 
   return null;
+}
+
+function throwIfCancelled(signal) {
+  if (!signal?.aborted) return;
+  const error = new Error("Cálculo cancelado.");
+  error.name = "AbortError";
+  throw error;
 }
 
 function prepareGraph(grafo, cost) {

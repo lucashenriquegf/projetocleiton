@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { aStar } from "../src/algorithms/AStar.js";
+import { aStar, aStarWithProgress } from "../src/algorithms/AStar.js";
+import { bfs } from "../src/algorithms/BSF.js";
 import { dfs } from "../src/algorithms/DFS.js";
 import { dijkstra } from "../src/algorithms/Dijkstra.js";
 import {
@@ -351,4 +352,70 @@ test("A* pode minimizar tempo em vez de distância", () => {
 
   assert.deepEqual(aStar({ grafo: graph, inicio: 1, destino: 3 }), [1, 3]);
   assert.deepEqual(aStar({ grafo: graph, inicio: 1, destino: 3, cost: "time" }), [1, 2, 3]);
+});
+
+test("algoritmos preservam o caminho ao mostrar lotes de 128 nós", async () => {
+  const ids = Array.from({ length: 260 }, (_, index) => index);
+  const graph = {
+    nodes: ids.map((id) => ({ id, latitude: 0, longitude: id * 0.001 })),
+    edges: ids.slice(1).map((id) => ({
+      from: id - 1,
+      to: id,
+      distance_m: 112,
+      travel_time_s: 10,
+    })),
+  };
+  const batchCounts = { astar: 0, bfs: 0, dfs: 0, dijkstra: 0 };
+
+  const aStarPath = await aStarWithProgress({
+    grafo: graph,
+    inicio: 0,
+    destino: 259,
+    cost: "time",
+    yieldEvery: 128,
+    yieldControl: async () => { batchCounts.astar += 1; },
+  });
+  const bfsPath = await bfs({
+    grafo: graph,
+    inicio: 0,
+    destino: 259,
+    markers: new Map(),
+    yieldEvery: 128,
+    yieldControl: async () => { batchCounts.bfs += 1; },
+  });
+  const dfsPath = await dfs({
+    grafo: graph,
+    inicio: 0,
+    destino: 259,
+    yieldEvery: 128,
+    yieldControl: async () => { batchCounts.dfs += 1; },
+  });
+  const dijkstraPath = await dijkstra({
+    grafo: graph,
+    inicio: 0,
+    destino: 259,
+    cost: "time",
+    yieldEvery: 128,
+    yieldControl: async () => { batchCounts.dijkstra += 1; },
+  });
+
+  assert.deepEqual(aStarPath, ids);
+  assert.deepEqual(bfsPath, ids);
+  assert.deepEqual(dfsPath, ids);
+  assert.deepEqual(dijkstraPath, ids);
+  assert.deepEqual(batchCounts, { astar: 3, bfs: 3, dfs: 3, dijkstra: 3 });
+
+  const controller = new AbortController();
+  await assert.rejects(
+    aStarWithProgress({
+      grafo: graph,
+      inicio: 0,
+      destino: 259,
+      cost: "time",
+      signal: controller.signal,
+      yieldEvery: 128,
+      yieldControl: async () => controller.abort(),
+    }),
+    (error) => error.name === "AbortError",
+  );
 });

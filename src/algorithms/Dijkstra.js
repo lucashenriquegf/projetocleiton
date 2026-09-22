@@ -114,7 +114,7 @@ export async function dijkstra({
   trace = null,
   onExplore = null,
   yieldControl = null,
-  yieldEvery = 64,
+  yieldEvery = 128,
   signal = null,
 }) {
   const vertices = construirVertices(grafo, cost);
@@ -154,7 +154,7 @@ async function calcularMenorCaminho(origem, observacao) {
     expansoes += 1;
     if (
       observacao.yieldControl &&
-      (expansoes === 1 || expansoes % observacao.yieldEvery === 0)
+      expansoes % observacao.yieldEvery === 0
     ) {
       await observacao.yieldControl();
       throwIfCancelled(observacao.signal);
@@ -172,6 +172,11 @@ async function calcularMenorCaminho(origem, observacao) {
         filaDePrioridade.adicionar(vizinho);
       }
     }
+  }
+
+  if (observacao.yieldControl && expansoes % observacao.yieldEvery !== 0) {
+    await observacao.yieldControl();
+    throwIfCancelled(observacao.signal);
   }
 }
 

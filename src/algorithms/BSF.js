@@ -4,6 +4,8 @@ export async function bfs({
   destino,
   markers,
   velocidade = 40,
+  yieldControl = null,
+  yieldEvery = 128,
 }) {
   const adjacency = new Map();
 
@@ -24,6 +26,8 @@ export async function bfs({
 
   const visitados = new Set();
   const anterior = new Map();
+  const tamanhoLote = Math.max(1, Number(yieldEvery) || 1);
+  let nosNoLote = 0;
 
   visitados.add(inicio);
 
@@ -41,7 +45,15 @@ export async function bfs({
       }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, velocidade));
+    if (yieldControl) {
+      nosNoLote += 1;
+      if (nosNoLote === tamanhoLote) {
+        await yieldControl();
+        nosNoLote = 0;
+      }
+    } else {
+      await new Promise((resolve) => setTimeout(resolve, velocidade));
+    }
 
     if (atual === destino) {
       break;
@@ -58,6 +70,10 @@ export async function bfs({
       anterior.set(vizinho, atual);
       fila.push(vizinho);
     }
+  }
+
+  if (yieldControl && nosNoLote > 0) {
+    await yieldControl();
   }
 
   if (!visitados.has(destino)) {
