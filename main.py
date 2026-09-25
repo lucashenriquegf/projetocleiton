@@ -1,7 +1,7 @@
 import json
 import osmnx as ox
 
-cidade = "Inhumas, Goiás, Brazil"
+cidade = "Goiânia, Goiás, Brazil"
 
 print(f"Baixando mapa de: {cidade}")
 
@@ -88,7 +88,7 @@ graph = {
     "edges": edges
 }
 
-with open("Inhumas.json", "w", encoding="utf-8") as file:
+with open("Goiânia.json", "w", encoding="utf-8") as file:
     json.dump(
         graph,
         file,
@@ -96,4 +96,4 @@ with open("Inhumas.json", "w", encoding="utf-8") as file:
         indent=2
     )
 
-print("Grafo salvo em: Inhumas.json")
+print("Grafo salvo em: Goiânia.json")

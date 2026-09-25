@@ -13,14 +13,19 @@ app.use(express.static(path.join(rootDir, "public")));
 app.use("/algorithms", express.static(path.join(rootDir, "src", "algorithms")));
 
 app.get("/api/grafo", (req, res) => {
-  const goianiaPath = path.join(rootDir, "Goiania.json");
-  const goianiaLowerPath = path.join(rootDir, "goiania.json");
-  if (fs.existsSync(goianiaPath)) {
-    return res.sendFile(goianiaPath);
+  const possiblePaths = [
+    path.join(rootDir, "Goiânia.json"),
+    path.join(rootDir, "goiânia.json"),
+    path.join(rootDir, "Goiania.json"),
+    path.join(rootDir, "goiania.json"),
+  ];
+
+  for (const candidatePath of possiblePaths) {
+    if (fs.existsSync(candidatePath)) {
+      return res.sendFile(candidatePath);
+    }
   }
-  if (fs.existsSync(goianiaLowerPath)) {
-    return res.sendFile(goianiaLowerPath);
-  }
+
   res.sendFile(path.join(rootDir, "Inhumas.json"));
 });
 
