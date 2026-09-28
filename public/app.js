@@ -17,6 +17,10 @@ import { aStarWithProgress } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
 import { dfs } from "/algorithms/DFS.js";
 import { dijkstra } from "/algorithms/Dijkstra.js";
+import { bidirectionalAStar } from "/algorithms/BidirectionalAStar.js";
+import { bidirectionalBfs } from "/algorithms/BidirectionalBFS.js";
+import { bidirectionalDfs } from "/algorithms/BidirectionalDFS.js";
+import { bidirectionalDijkstra } from "/algorithms/BidirectionalDijkstra.js";
 
 const state = {
   graph: null,
@@ -57,6 +61,7 @@ const elements = {
   cancelCalculation: document.querySelector("#cancel-calculation"),
   calculationNote: document.querySelector("#calculation-note"),
   algorithm: document.querySelector("#algorithm"),
+  modelType: document.querySelector("#model-type"),
   averageSpeed: document.querySelector("#average-speed"),
   speedValue: document.querySelector("#speed-value"),
   h3Toggle: document.querySelector("#h3-toggle"),
@@ -179,6 +184,7 @@ function bindInterfaceEvents() {
   elements.calculateRoute.addEventListener("click", calculateRoute);
   elements.cancelCalculation.addEventListener("click", cancelCalculation);
   elements.algorithm.addEventListener("change", invalidateRoute);
+  elements.modelType.addEventListener("change", invalidateRoute);
   elements.averageSpeed.addEventListener("input", () => {
     elements.speedValue.textContent = elements.averageSpeed.value;
     invalidateRoute();
@@ -511,11 +517,13 @@ async function calculateRoute() {
   elements.cancelCalculation.disabled = false;
   elements.cancelCalculation.textContent = "Cancelar";
   elements.algorithm.disabled = true;
+  elements.modelType.disabled = true;
   elements.averageSpeed.disabled = true;
   elements.clearRoute.disabled = true;
   await new Promise((resolve) => requestAnimationFrame(resolve));
 
   const algorithm = elements.algorithm.value;
+  const modelType = elements.modelType.value;
   const startedAt = performance.now();
   const departureTimeMs = Date.now();
   let result;
@@ -536,6 +544,7 @@ async function calculateRoute() {
     });
     const calculatedRoute = await calculateSelectedAlgorithmRoute(
       algorithm,
+      modelType,
       plannedStops,
       calculationGraph,
       calculationRoutingGraph,
@@ -561,6 +570,7 @@ async function calculateRoute() {
   elements.cancelCalculation.disabled = false;
   elements.cancelCalculation.textContent = "Cancelar";
   elements.algorithm.disabled = false;
+  elements.modelType.disabled = false;
   elements.averageSpeed.disabled = false;
   elements.clearRoute.disabled = state.stops.length === 0;
   finishExploration();
@@ -581,6 +591,7 @@ async function calculateRoute() {
     ...result,
     computationTimeMs,
     algorithm,
+    modelType,
     departureTimeMs,
     pickupCount: pickups.length,
     deliveryCount: deliveries.length,
@@ -596,6 +607,7 @@ async function calculateRoute() {
 
 async function calculatePathWithSelectedAlgorithm(
   algorithm,
+  modelType,
   graph,
   routingGraph,
   inicio,
@@ -605,6 +617,40 @@ async function calculatePathWithSelectedAlgorithm(
   throwIfCalculationCancelled(signal);
   const fallbackSpeedKph = Number(elements.averageSpeed?.value) || 40;
   const parameters = { grafo: graph, inicio, destino, fallbackSpeedKph };
+
+  if (modelType === "bidirectional") {
+    const progress = {
+      ...parameters,
+      signal,
+      yieldControl: () => yieldExplorationBatch(signal),
+      yieldEvery: SEARCH_BATCH_SIZE,
+    };
+
+    if (algorithm === "astar") {
+      return bidirectionalAStar({
+        ...progress,
+        cost: "time",
+        onExplore: ({ from, to }) => recordExplorationProgress(routingGraph, from, to),
+      });
+    }
+    if (algorithm === "dijkstra") {
+      return bidirectionalDijkstra({
+        ...progress,
+        cost: "time",
+        onExplore: ({ de, para }) => recordExplorationProgress(routingGraph, de, para),
+      });
+    }
+    if (algorithm === "dfs") {
+      return bidirectionalDfs({
+        ...progress,
+        onExplore: ({ de, para }) => recordExplorationProgress(routingGraph, de, para),
+      });
+    }
+    return bidirectionalBfs({
+      ...progress,
+      onExplore: ({ de, para }) => recordExplorationProgress(routingGraph, de, para),
+    });
+  }
 
   if (algorithm === "astar") {
     return aStarWithProgress({
@@ -672,6 +718,7 @@ async function yieldExplorationBatch(signal) {
 
 async function calculateSelectedAlgorithmRoute(
   algorithm,
+  modelType,
   stops,
   graph,
   routingGraph,
@@ -736,6 +783,7 @@ async function calculateSelectedAlgorithmRoute(
 
           nodeIds = await calculatePathWithSelectedAlgorithm(
             algorithm,
+            modelType,
             corridorGraph,
             corridorRoutingGraph,
             current.nodeId,
@@ -763,6 +811,7 @@ async function calculateSelectedAlgorithmRoute(
         if (!foundInCorridor || !nodeIds || nodeIds.at(-1) !== target.nodeId) {
           nodeIds = await calculatePathWithSelectedAlgorithm(
             algorithm,
+            modelType,
             graph,
             routingGraph,
             current.nodeId,
@@ -774,6 +823,7 @@ async function calculateSelectedAlgorithmRoute(
     } else {
       nodeIds = await calculatePathWithSelectedAlgorithm(
         algorithm,
+        modelType,
         graph,
         routingGraph,
         current.nodeId,
@@ -843,7 +893,7 @@ function renderRouteSummary(result, scrollToSummary = true) {
   elements.pickupTotal.textContent = result.pickupCount;
   elements.deliveryTotal.textContent = result.deliveryCount;
   elements.computationTime.textContent = formatComputationTime(result.computationTimeMs);
-  elements.selectedAlgorithm.textContent = getAlgorithmLabel(result.algorithm);
+  elements.selectedAlgorithm.textContent = `${getAlgorithmLabel(result.algorithm)} · ${result.modelType === "bidirectional" ? "Bidirecional" : "Normal"}`;
   if (elements.h3Metric) {
     elements.h3Metric.textContent = result.h3Info
       ? `Nível ${result.h3Info.bufferK} (${result.h3Info.cellCount} hex)`
