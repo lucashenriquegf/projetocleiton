@@ -29,6 +29,7 @@ const state = {
   playbackIndexes: [],
   playbackPaused: false,
   syncingMaps: false,
+  activeWorkers: [],
 };
 
 const elements = {
@@ -363,6 +364,204 @@ function updateReadyState() {
   else elements.comparisonStatus.textContent = `${state.configurations.length} configurações prontas para comparar.`;
 }
 
+function terminateActiveWorkers() {
+  if (state.activeWorkers && state.activeWorkers.length) {
+    for (const worker of state.activeWorkers) {
+      try {
+        worker.terminate();
+      } catch (error) {
+        console.warn("Erro ao finalizar worker:", error);
+      }
+    }
+    state.activeWorkers = [];
+  }
+}
+
+async function runComparisonWithWorkers({
+  configurations,
+  graph,
+  stops,
+  departureTimeMs,
+  averageSpeedKph,
+  signal,
+}) {
+  throwIfCancelled(signal);
+  const totalTasks = configurations.length;
+  const poolSize = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, totalTasks));
+  const workers = [];
+
+  for (let i = 0; i < poolSize; i += 1) {
+    throwIfCancelled(signal);
+    const worker = new Worker("/comparacao/worker.js", { type: "module" });
+    workers.push(worker);
+    state.activeWorkers.push(worker);
+  }
+
+  elements.comparisonStatus.textContent = `Preparando ${poolSize} threads em paralelo…`;
+  await Promise.all(
+    workers.map((worker) => new Promise((resolve, reject) => {
+      const handleMessage = (event) => {
+        if (event.data?.type === "INIT_OK") {
+          worker.removeEventListener("message", handleMessage);
+          resolve();
+        }
+      };
+      worker.addEventListener("message", handleMessage);
+      worker.addEventListener("error", (err) => reject(err), { once: true });
+      worker.postMessage({ type: "INIT", payload: { graph } });
+    }))
+  );
+
+  throwIfCancelled(signal);
+  let nextTaskIndex = 0;
+  let completedCount = 0;
+  const results = new Array(totalTasks);
+
+  elements.comparisonStatus.textContent = `Calculando em paralelo (0/${totalTasks} concluídos) em ${poolSize} threads…`;
+
+  await new Promise((resolve, reject) => {
+    let finished = false;
+
+    const onAbort = () => {
+      if (finished) return;
+      finished = true;
+      terminateActiveWorkers();
+      const error = new Error("Comparação cancelada.");
+      error.name = "AbortError";
+      reject(error);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+
+    function assignNext(worker) {
+      if (finished || signal.aborted) return;
+      if (nextTaskIndex >= totalTasks) {
+        if (completedCount === totalTasks) {
+          finished = true;
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        }
+        return;
+      }
+
+      const taskId = nextTaskIndex;
+      nextTaskIndex += 1;
+      const configuration = { ...configurations[taskId] };
+
+      worker.onmessage = (event) => {
+        if (finished || signal.aborted) return;
+        const data = event.data;
+        if (!data || data.taskId !== taskId) return;
+
+        let outcome = null;
+        let runtimeError = null;
+        if (data.type === "SUCCESS") {
+          outcome = data.outcome;
+        } else if (data.type === "ERROR") {
+          runtimeError = data.error;
+        }
+
+        results[taskId] = {
+          configuration,
+          outcome,
+          computationTimeMs: data.computationTimeMs || 0,
+          error: runtimeError || outcome?.result?.error || null,
+        };
+
+        completedCount += 1;
+        elements.comparisonStatus.textContent = `Calculando em paralelo (${completedCount}/${totalTasks} concluídos) em ${poolSize} threads…`;
+
+        if (completedCount === totalTasks) {
+          finished = true;
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        } else {
+          assignNext(worker);
+        }
+      };
+
+      worker.onerror = (err) => {
+        if (finished || signal.aborted) return;
+        console.error("Erro no worker:", err);
+        results[taskId] = {
+          configuration,
+          outcome: null,
+          computationTimeMs: 0,
+          error: err.message || "Erro no worker",
+        };
+        completedCount += 1;
+        elements.comparisonStatus.textContent = `Calculando em paralelo (${completedCount}/${totalTasks} concluídos) em ${poolSize} threads…`;
+
+        if (completedCount === totalTasks) {
+          finished = true;
+          signal.removeEventListener("abort", onAbort);
+          resolve();
+        } else {
+          assignNext(worker);
+        }
+      };
+
+      worker.postMessage({
+        type: "RUN",
+        payload: {
+          taskId,
+          stops,
+          configuration,
+          departureTimeMs,
+          averageSpeedKph,
+        },
+      });
+    }
+
+    for (const worker of workers) {
+      assignNext(worker);
+    }
+  });
+
+  state.results = results;
+}
+
+async function runComparisonSequential({
+  configurations,
+  graph,
+  stops,
+  departureTimeMs,
+  averageSpeedKph,
+  signal,
+}) {
+  for (let index = 0; index < configurations.length; index += 1) {
+    throwIfCancelled(signal);
+    const configuration = { ...configurations[index] };
+    elements.comparisonStatus.textContent = `Calculando ${index + 1}/${configurations.length}: ${configurationLabel(configuration)}…`;
+    await nextFrame();
+    const startedAt = performance.now();
+    let outcome;
+    let runtimeError = null;
+    try {
+      outcome = await runRouteConfiguration({
+        graph,
+        stops,
+        configuration,
+        departureTimeMs,
+        averageSpeedKph,
+        h3: window.h3,
+        signal,
+        yieldControl: () => yieldComparison(signal),
+      });
+    } catch (error) {
+      if (error.name === "AbortError") throw error;
+      console.error(error);
+      runtimeError = error.message;
+    }
+    const computationTimeMs = performance.now() - startedAt;
+    state.results.push({
+      configuration,
+      outcome,
+      computationTimeMs,
+      error: runtimeError || outcome?.result?.error || null,
+    });
+  }
+}
+
 async function runComparison() {
   if (state.currentController || elements.runComparison.disabled) return;
   stopPlayback();
@@ -370,6 +569,7 @@ async function runComparison() {
   const controller = new AbortController();
   state.currentController = controller;
   state.results = [];
+  terminateActiveWorkers();
   elements.runComparison.disabled = true;
   elements.cancelComparison.hidden = false;
   elements.clearStops.disabled = true;
@@ -377,49 +577,53 @@ async function runComparison() {
   elements.results.hidden = true;
   setConfigurationControlsDisabled(true);
   const departureTimeMs = Date.now();
+  const cleanStops = state.stops.map(stripMarker);
+  const averageSpeedKph = Number(elements.averageSpeed.value);
 
   try {
-    for (let index = 0; index < state.configurations.length; index += 1) {
-      throwIfCancelled(controller.signal);
-      const configuration = { ...state.configurations[index] };
-      elements.comparisonStatus.textContent = `Calculando ${index + 1}/${state.configurations.length}: ${configurationLabel(configuration)}…`;
-      await nextFrame();
-      const startedAt = performance.now();
-      let outcome;
-      let runtimeError = null;
+    if (typeof Worker !== "undefined") {
       try {
-        outcome = await runRouteConfiguration({
+        await runComparisonWithWorkers({
+          configurations: state.configurations,
           graph: state.graph,
-          stops: state.stops.map(stripMarker),
-          configuration,
+          stops: cleanStops,
           departureTimeMs,
-          averageSpeedKph: Number(elements.averageSpeed.value),
-          h3: window.h3,
+          averageSpeedKph,
           signal: controller.signal,
-          yieldControl: () => yieldComparison(controller.signal),
         });
-      } catch (error) {
-        if (error.name === "AbortError") throw error;
-        console.error(error);
-        runtimeError = error.message;
+      } catch (workerError) {
+        if (workerError.name === "AbortError") throw workerError;
+        console.warn("Falha ao executar via Web Workers; usando fallback sequencial:", workerError);
+        terminateActiveWorkers();
+        state.results = [];
+        await runComparisonSequential({
+          configurations: state.configurations,
+          graph: state.graph,
+          stops: cleanStops,
+          departureTimeMs,
+          averageSpeedKph,
+          signal: controller.signal,
+        });
       }
-      const computationTimeMs = performance.now() - startedAt;
-      state.results.push({
-        configuration,
-        outcome,
-        computationTimeMs,
-        error: runtimeError || outcome?.result?.error || null,
+    } else {
+      await runComparisonSequential({
+        configurations: state.configurations,
+        graph: state.graph,
+        stops: cleanStops,
+        departureTimeMs,
+        averageSpeedKph,
+        signal: controller.signal,
       });
     }
 
     throwIfCancelled(controller.signal);
-    const visualConnected = connectStopsToGraph(state.graph, state.stops.map(stripMarker), {
-      fallbackSpeedKph: Number(elements.averageSpeed.value),
+    const visualConnected = connectStopsToGraph(state.graph, cleanStops, {
+      fallbackSpeedKph: averageSpeedKph,
     });
     state.visualRoutingGraph = buildRoutingGraph(visualConnected.graph, {
-      fallbackSpeedKph: Number(elements.averageSpeed.value),
+      fallbackSpeedKph: averageSpeedKph,
     });
-    elements.comparisonStatus.textContent = "Comparação concluída.";
+    elements.comparisonStatus.textContent = `Comparação concluída (${state.results.length} configurações).`;
     elements.results.hidden = false;
     state.selectedResultIds = new Set(
       state.results
@@ -440,6 +644,7 @@ async function runComparison() {
       showToast(error.message, true);
     }
   } finally {
+    terminateActiveWorkers();
     state.currentController = null;
     elements.cancelComparison.hidden = true;
     elements.addConfiguration.disabled = false;
@@ -451,6 +656,7 @@ async function runComparison() {
 
 function cancelComparison() {
   if (!state.currentController) return;
+  terminateActiveWorkers();
   state.currentController.abort();
   elements.cancelComparison.disabled = true;
   elements.comparisonStatus.textContent = "Cancelando…";

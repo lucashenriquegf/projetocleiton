@@ -31,17 +31,23 @@ class FilaDePrioridade {
 
   adicionar(vertice) {
     this.itens.push(vertice);
-    this.subir(this.itens.length - 1);
+    const index = this.itens.length - 1;
+    vertice._heapIndex = index;
+    this.subir(index);
   }
 
   remover(vertice) {
-    const index = this.itens.indexOf(vertice);
+    const index = Number.isInteger(vertice._heapIndex) && vertice._heapIndex >= 0 && this.itens[vertice._heapIndex] === vertice
+      ? vertice._heapIndex
+      : this.itens.indexOf(vertice);
     if (index < 0) return;
 
+    vertice._heapIndex = -1;
     const ultimo = this.itens.pop();
     if (index === this.itens.length) return;
 
     this.itens[index] = ultimo;
+    ultimo._heapIndex = index;
     if (index > 0 && this.comparar(this.itens[index], this.itens[this.pai(index)]) < 0) {
       this.subir(index);
     } else {
@@ -52,10 +58,12 @@ class FilaDePrioridade {
   retirarPrimeiro() {
     if (!this.itens.length) return null;
     const primeiro = this.itens[0];
+    primeiro._heapIndex = -1;
     const ultimo = this.itens.pop();
 
     if (this.itens.length) {
       this.itens[0] = ultimo;
+      ultimo._heapIndex = 0;
       this.descer(0);
     }
 
@@ -71,7 +79,12 @@ class FilaDePrioridade {
     while (index > 0) {
       const parentIndex = this.pai(index);
       if (this.comparar(this.itens[parentIndex], this.itens[index]) <= 0) break;
-      [this.itens[parentIndex], this.itens[index]] = [this.itens[index], this.itens[parentIndex]];
+      const parent = this.itens[parentIndex];
+      const current = this.itens[index];
+      this.itens[parentIndex] = current;
+      this.itens[index] = parent;
+      current._heapIndex = parentIndex;
+      parent._heapIndex = index;
       index = parentIndex;
     }
   }
@@ -98,7 +111,12 @@ class FilaDePrioridade {
       }
       if (menor === index) break;
 
-      [this.itens[index], this.itens[menor]] = [this.itens[menor], this.itens[index]];
+      const current = this.itens[index];
+      const next = this.itens[menor];
+      this.itens[index] = next;
+      this.itens[menor] = current;
+      next._heapIndex = index;
+      current._heapIndex = menor;
       index = menor;
     }
   }
