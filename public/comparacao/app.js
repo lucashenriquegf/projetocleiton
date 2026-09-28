@@ -22,6 +22,7 @@ const state = {
   configurationCounter: 0,
   currentController: null,
   results: [],
+  selectedResultIds: new Set(),
   resultMaps: [],
   overlayMap: null,
   animationFrame: null,
@@ -313,13 +314,21 @@ function renderConfigurations() {
         <label>Tipo<select class="model-type"><option value="normal" ${configuration.modelType === "normal" ? "selected" : ""}>Normal</option><option value="bidirectional" ${configuration.modelType === "bidirectional" ? "selected" : ""}>Bidirecional</option></select></label>
         <div class="h3-field">
           <label class="h3-toggle"><input class="use-h3" type="checkbox" ${configuration.useH3 ? "checked" : ""} />Usar corredor H3</label>
-          <label>Resolução<select class="h3-resolution" ${configuration.useH3 ? "" : "disabled"}>${[7,8,9,10].map((value) => `<option value="${value}" ${configuration.h3Resolution === value ? "selected" : ""}>${value}</option>`).join("")}</select></label>
+          <label class="h3-resolution-field">
+            <span class="h3-resolution-heading">Tamanho da célula <strong class="h3-resolution-value">${configuration.h3Resolution}</strong></span>
+            <input class="h3-resolution" type="range" min="7" max="10" step="1" value="${configuration.h3Resolution}" ${configuration.useH3 ? "" : "disabled"} />
+            <span class="h3-resolution-labels"><span>7 (maior)</span><span>10 (menor)</span></span>
+          </label>
         </div>
       </div>`;
     card.querySelector(".algorithm").addEventListener("change", (event) => updateConfiguration(configuration.id, { algorithm: event.target.value }));
     card.querySelector(".model-type").addEventListener("change", (event) => updateConfiguration(configuration.id, { modelType: event.target.value }));
     card.querySelector(".use-h3").addEventListener("change", (event) => updateConfiguration(configuration.id, { useH3: event.target.checked }));
-    card.querySelector(".h3-resolution").addEventListener("change", (event) => updateConfiguration(configuration.id, { h3Resolution: Number(event.target.value) }));
+    card.querySelector(".h3-resolution").addEventListener("input", (event) => {
+      configuration.h3Resolution = Number(event.target.value);
+      card.querySelector(".h3-resolution-value").textContent = event.target.value;
+      invalidateResults();
+    });
     card.querySelector(".duplicate").addEventListener("click", () => addConfiguration(configuration));
     card.querySelector(".remove").addEventListener("click", () => {
       if (state.currentController) return;
@@ -412,10 +421,14 @@ async function runComparison() {
     });
     elements.comparisonStatus.textContent = "Comparação concluída.";
     elements.results.hidden = false;
+    state.selectedResultIds = new Set(
+      state.results
+        .filter((record) => !record.error)
+        .slice(0, 2)
+        .map((record) => record.configuration.id),
+    );
     renderResultsTable();
-    renderResultMaps();
-    renderOverlayMap();
-    updateVisualMode();
+    refreshVisualizations();
     elements.results.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
     if (error.name === "AbortError") {
@@ -446,6 +459,11 @@ function cancelComparison() {
 
 function setConfigurationControlsDisabled(disabled) {
   elements.configurationList.querySelectorAll("button, select, input").forEach((control) => { control.disabled = disabled; });
+  if (!disabled) {
+    elements.configurationList.querySelectorAll(".configuration-card").forEach((card) => {
+      card.querySelector(".h3-resolution").disabled = !card.querySelector(".use-h3").checked;
+    });
+  }
   elements.averageSpeed.disabled = disabled;
   document.querySelectorAll(".stop-button").forEach((control) => { control.disabled = disabled; });
 }
@@ -458,8 +476,9 @@ function renderResultsTable() {
     const result = record.outcome?.result;
     const info = record.outcome?.h3Info;
     const deadlines = record.outcome?.deadlineInfo || { lateCount: 0, onTimeCount: 0 };
+    const isVisible = state.selectedResultIds.has(record.configuration.id);
     if (record.error) {
-      return `<tr><td><span class="result-name" style="--config-color:${record.configuration.color}"><i class="color-dot"></i>${escapeHtml(configurationLabel(record.configuration))}</span></td><td colspan="6" class="failed">${escapeHtml(record.error)}</td></tr>`;
+      return `<tr><td><span class="result-name" style="--config-color:${record.configuration.color}"><i class="color-dot"></i>${escapeHtml(configurationLabel(record.configuration))}</span></td><td colspan="6" class="failed">${escapeHtml(record.error)}</td><td><select class="result-visibility" disabled><option>Indisponível</option></select></td></tr>`;
     }
     return `<tr class="${record === best ? "best" : ""}">
       <td><span class="result-name" style="--config-color:${record.configuration.color}"><i class="color-dot"></i>${escapeHtml(configurationLabel(record.configuration))}${record === best ? '<span class="winner">Melhor no critério</span>' : ""}</span></td>
@@ -467,10 +486,20 @@ function renderResultsTable() {
       <td>${formatDuration(result.travelTimeSeconds)}</td>
       <td>${formatDistance(result.distanceMeters)}</td>
       <td>${record.outcome.trace.length.toLocaleString("pt-BR")}</td>
-      <td>${info ? `Nível ${info.bufferK} · ${info.cellCount.toLocaleString("pt-BR")} hex` : "Desativado"}</td>
+      <td>${info ? `Célula ${info.resolution} · buffer ${info.bufferK} · ${info.cellCount.toLocaleString("pt-BR")} hex` : "Desativado"}</td>
       <td class="${deadlines.lateCount ? "failed" : ""}">${deadlines.lateCount ? `${deadlines.lateCount} atrasada(s)` : `${deadlines.onTimeCount} no prazo`}</td>
+      <td><select class="result-visibility ${isVisible ? "showing" : ""}" data-configuration-id="${escapeHtml(record.configuration.id)}"><option value="show" ${isVisible ? "selected" : ""}>Exibir no mapa</option><option value="hide" ${isVisible ? "" : "selected"}>Não exibir</option></select></td>
     </tr>`;
   }).join("");
+  elements.resultsBody.querySelectorAll(".result-visibility[data-configuration-id]").forEach((select) => {
+    select.addEventListener("change", () => {
+      const configurationId = select.dataset.configurationId;
+      if (select.value === "show") state.selectedResultIds.add(configurationId);
+      else state.selectedResultIds.delete(configurationId);
+      select.classList.toggle("showing", select.value === "show");
+      refreshVisualizations();
+    });
+  });
 }
 
 function metricValue(record, metric) {
@@ -481,10 +510,29 @@ function metricValue(record, metric) {
   return Number(record.outcome.result[metric]) || 0;
 }
 
+function selectedResults() {
+  return state.results.filter((record) =>
+    !record.error && state.selectedResultIds.has(record.configuration.id),
+  );
+}
+
+function refreshVisualizations() {
+  stopPlayback();
+  renderResultMaps();
+  renderOverlayMap();
+  updateVisualMode();
+}
+
 function renderResultMaps() {
   invalidateResultMaps();
   elements.comparisonMaps.innerHTML = "";
-  state.results.forEach((record, index) => {
+  const records = selectedResults();
+  elements.comparisonMaps.className = `comparison-maps ${records.length === 1 ? "one-selected" : records.length === 2 ? "two-selected" : "many-selected"}`;
+  if (!records.length) {
+    elements.comparisonMaps.innerHTML = '<div class="visual-empty">Selecione uma ou mais configurações acima para visualizar as rotas.</div>';
+    return;
+  }
+  records.forEach((record, index) => {
     const card = document.createElement("article");
     card.className = "result-map-card";
     card.style.setProperty("--config-color", record.configuration.color);
@@ -512,11 +560,11 @@ function renderOverlayMap() {
   state.overlayMap = L.map("overlay-map", { zoomControl: true, preferCanvas: true });
   addTileLayer(state.overlayMap);
   const bounds = [];
+  const records = selectedResults();
   elements.overlayLegend.innerHTML = "";
-  const firstSuccessful = state.results.find((record) => !record.error);
+  const firstSuccessful = records[0];
   if (firstSuccessful) drawStaticStops(state.overlayMap, firstSuccessful.outcome.stops);
-  state.results.forEach((record) => {
-    if (record.error) return;
+  records.forEach((record) => {
     drawFinalRoute(state.overlayMap, record.outcome.result.coordinates, record.configuration.color, 5);
     bounds.push(...record.outcome.result.coordinates);
     const item = document.createElement("span");
@@ -529,9 +577,10 @@ function renderOverlayMap() {
 
 function updateVisualMode() {
   const overlay = elements.visualMode.value === "overlay";
+  const records = selectedResults();
   elements.comparisonMaps.hidden = overlay;
   elements.overlayWrap.hidden = !overlay;
-  elements.replay.disabled = overlay || !state.results.some((record) => record.outcome?.trace.length);
+  elements.replay.disabled = overlay || !records.some((record) => record.outcome?.trace.length);
   elements.pause.disabled = true;
   stopPlayback();
   setTimeout(() => {
@@ -671,6 +720,7 @@ function invalidateResults() {
   if (state.currentController) return;
   stopPlayback();
   state.results = [];
+  state.selectedResultIds.clear();
   state.visualRoutingGraph = null;
   elements.results.hidden = true;
   invalidateResultMaps();
