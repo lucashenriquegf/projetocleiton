@@ -221,3 +221,19 @@ button, input, select { font: inherit; }
   .panel-footer { position: static; }
   .network-toggle > span:last-child, .map-legend { display: none; }
 }
+
+.h3-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.legend-line.h3-corridor {
+  background: rgba(2, 132, 199, 0.4);
+  border: 1px solid #0284c7;
+}

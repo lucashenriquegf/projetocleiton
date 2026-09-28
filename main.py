@@ -11,6 +11,10 @@ G = ox.graph.graph_from_place(
     network_type="drive"
 )
 
+# Garante que apenas o maior componente fortemente conectado seja mantido,
+# eliminando ilhas isoladas e becos sem saída desconectados no OpenStreetMap
+G = ox.truncate.largest_component(G, strongly=True)
+
 # O OpenStreetMap nem sempre informa maxspeed. Nesses casos, o OSMnx usa
 # velocidades típicas por categoria viária para estimar o tempo em fluxo livre.
 velocidades_por_via = {

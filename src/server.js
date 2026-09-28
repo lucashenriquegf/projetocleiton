@@ -11,6 +11,7 @@ const rootDir = path.join(__dirname, "..");
 app.use(express.static(path.join(rootDir, "public")));
 
 app.use("/algorithms", express.static(path.join(rootDir, "src", "algorithms")));
+app.use("/vendor/h3-js", express.static(path.join(rootDir, "node_modules", "h3-js", "dist")));
 
 app.get("/api/grafo", (req, res) => {
   const possiblePaths = [

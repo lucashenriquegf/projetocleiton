@@ -7,6 +7,12 @@ import {
   findStopsOnPath,
   prioritizeStopOrder,
 } from "/algorithms/routing.mjs";
+import {
+  expandCorridor,
+  filterGraphByCorridor,
+  getBaseCorridor,
+  getHexagonBoundaries,
+} from "/algorithms/h3_corridor.js";
 import { aStarWithProgress } from "/algorithms/AStar.js";
 import { bfs } from "/algorithms/BSF.js";
 import { dfs } from "/algorithms/DFS.js";
@@ -19,6 +25,12 @@ const state = {
   networkLayer: null,
   stops: [],
   routeLayers: [],
+  corridorLayers: [],
+  lastCorridorCells: null,
+  useH3Corridor: true,
+  h3Resolution: 9,
+  h3ShowPolygons: true,
+  maxBufferExpansion: 6,
   explorationGroup: null,
   exploredEdgeKeys: new Set(),
   activeExplorationLayer: null,
@@ -47,6 +59,12 @@ const elements = {
   algorithm: document.querySelector("#algorithm"),
   averageSpeed: document.querySelector("#average-speed"),
   speedValue: document.querySelector("#speed-value"),
+  h3Toggle: document.querySelector("#h3-toggle"),
+  h3Controls: document.querySelector("#h3-controls"),
+  h3Res: document.querySelector("#h3-res"),
+  h3ResValue: document.querySelector("#h3-res-value"),
+  h3ShowPolygons: document.querySelector("#h3-show-polygons"),
+  h3Metric: document.querySelector("#h3-metric"),
   routeSummary: document.querySelector("#route-summary"),
   totalDistance: document.querySelector("#total-distance"),
   estimatedTime: document.querySelector("#estimated-time"),
@@ -169,11 +187,57 @@ function bindInterfaceEvents() {
   elements.explorationToggle.addEventListener("change", () => {
     setExplorationVisibility(elements.explorationToggle.checked);
   });
+  elements.h3Toggle?.addEventListener("change", () => {
+    state.useH3Corridor = elements.h3Toggle.checked;
+    if (elements.h3Controls) {
+      elements.h3Controls.style.display = state.useH3Corridor ? "flex" : "none";
+    }
+    clearCorridorLayers();
+    invalidateRoute();
+  });
+  elements.h3Res?.addEventListener("input", () => {
+    state.h3Resolution = Number(elements.h3Res.value) || 9;
+    if (elements.h3ResValue) elements.h3ResValue.textContent = state.h3Resolution;
+    clearCorridorLayers();
+    invalidateRoute();
+  });
+  elements.h3ShowPolygons?.addEventListener("change", () => {
+    state.h3ShowPolygons = elements.h3ShowPolygons.checked;
+    if (!state.h3ShowPolygons) {
+      clearCorridorLayers();
+    } else if (state.lastCorridorCells) {
+      drawCorridorHexagons(state.lastCorridorCells);
+    }
+  });
   elements.deliveryForm.addEventListener("submit", saveDeliveryDeadline);
   elements.closeDeliveryDialog.addEventListener("click", closeDeliveryEditor);
   elements.cancelDelivery.addEventListener("click", closeDeliveryEditor);
   elements.deliveryDialog.addEventListener("close", () => {
     state.editingDeliveryId = null;
+  });
+}
+
+function clearCorridorLayers() {
+  state.corridorLayers.forEach((layer) => layer.remove());
+  state.corridorLayers = [];
+}
+
+function drawCorridorHexagons(h3Cells) {
+  clearCorridorLayers();
+  if (!state.map || !h3Cells || !h3Cells.size) return;
+  state.lastCorridorCells = new Set(h3Cells);
+  const boundaries = getHexagonBoundaries(h3Cells);
+  boundaries.forEach((boundary) => {
+    const polygon = L.polygon(boundary, {
+      color: "#0284c7",
+      weight: 1.5,
+      opacity: 0.75,
+      fillColor: "#38bdf8",
+      fillOpacity: 0.08,
+      dashArray: "3, 3",
+      interactive: false,
+    }).addTo(state.map);
+    state.corridorLayers.push(polygon);
   });
 }
 
@@ -404,6 +468,7 @@ function clearAllStops() {
 
 function invalidateRoute() {
   clearRouteLayers();
+  clearCorridorLayers();
   clearExploration();
   state.lastRoute = null;
   elements.routeSummary.hidden = true;
@@ -436,6 +501,7 @@ async function calculateRoute() {
   }
 
   clearExploration();
+  clearCorridorLayers();
   const calculationController = new AbortController();
   state.currentCalculationController = calculationController;
   elements.calculateRoute.classList.add("loading");
@@ -618,19 +684,104 @@ async function calculateSelectedAlgorithmRoute(
   const orderedStops = [stops[0]];
   const remainingStops = stops.slice(1);
   const pathResults = [];
+  const allCorridorCells = new Set();
+  let maxExpandedBufferLevel = 0;
 
   while (remainingStops.length) {
     throwIfCalculationCancelled(signal);
     const current = orderedStops.at(-1);
     const target = remainingStops[0];
-    const nodeIds = await calculatePathWithSelectedAlgorithm(
-      algorithm,
-      graph,
-      routingGraph,
-      current.nodeId,
-      target.nodeId,
-      signal,
-    );
+
+    let nodeIds = null;
+    let foundInCorridor = false;
+
+    if (state.useH3Corridor && typeof window !== "undefined" && window.h3) {
+      const startNode = routingGraph.nodes.get(current.nodeId);
+      const targetNode = routingGraph.nodes.get(target.nodeId);
+
+      if (startNode && targetNode) {
+        const resolution = state.h3Resolution || 9;
+        const startCell = window.h3.latLngToCell(Number(startNode.latitude), Number(startNode.longitude), resolution);
+        const goalCell = window.h3.latLngToCell(Number(targetNode.latitude), Number(targetNode.longitude), resolution);
+        const baseLine = getBaseCorridor(startCell, goalCell, resolution, window.h3);
+
+        let bufferK = 0;
+        let prevCellCount = 0;
+
+        while (true) {
+          throwIfCalculationCancelled(signal);
+          const allowedCells = expandCorridor(baseLine, bufferK, window.h3);
+          if (allowedCells.size === prevCellCount && bufferK > 0) {
+            break;
+          }
+          prevCellCount = allowedCells.size;
+
+          const corridorGraph = filterGraphByCorridor(
+            graph,
+            allowedCells,
+            new Set(),
+            resolution,
+            current.nodeId,
+            target.nodeId,
+            window.h3,
+          );
+          const corridorRoutingGraph = buildRoutingGraph(corridorGraph, {
+            fallbackSpeedKph: Number(elements.averageSpeed.value),
+          });
+
+          if (state.h3ShowPolygons) {
+            allowedCells.forEach((c) => allCorridorCells.add(c));
+            drawCorridorHexagons(allCorridorCells);
+          }
+
+          nodeIds = await calculatePathWithSelectedAlgorithm(
+            algorithm,
+            corridorGraph,
+            corridorRoutingGraph,
+            current.nodeId,
+            target.nodeId,
+            signal,
+          );
+
+          if (nodeIds && nodeIds.at(-1) === target.nodeId) {
+            foundInCorridor = true;
+            maxExpandedBufferLevel = Math.max(maxExpandedBufferLevel, bufferK);
+            break;
+          }
+
+          // Expansão dinâmica sem teto fixo de anéis
+          if (bufferK === 0) bufferK = 1;
+          else if (bufferK < 4) bufferK += 1;
+          else if (bufferK < 10) bufferK += 2;
+          else bufferK += Math.max(3, Math.floor(bufferK * 0.3));
+
+          if (corridorGraph.nodes.length >= graph.nodes.length || bufferK > 200) {
+            break;
+          }
+        }
+
+        if (!foundInCorridor || !nodeIds || nodeIds.at(-1) !== target.nodeId) {
+          nodeIds = await calculatePathWithSelectedAlgorithm(
+            algorithm,
+            graph,
+            routingGraph,
+            current.nodeId,
+            target.nodeId,
+            signal,
+          );
+        }
+      }
+    } else {
+      nodeIds = await calculatePathWithSelectedAlgorithm(
+        algorithm,
+        graph,
+        routingGraph,
+        current.nodeId,
+        target.nodeId,
+        signal,
+      );
+    }
+
     if (!nodeIds || nodeIds.at(-1) !== target.nodeId) {
       return {
         stops,
@@ -659,9 +810,18 @@ async function calculateSelectedAlgorithmRoute(
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
 
+  const multiStopResult = assembleMultiStopRoute(orderedStops, pathResults);
+  if (multiStopResult && !multiStopResult.error) {
+    multiStopResult.h3Info = state.useH3Corridor ? {
+      bufferK: maxExpandedBufferLevel,
+      cellCount: allCorridorCells.size,
+      resolution: state.h3Resolution,
+    } : null;
+  }
+
   return {
     stops: orderedStops,
-    result: assembleMultiStopRoute(orderedStops, pathResults),
+    result: multiStopResult,
   };
 }
 
@@ -684,6 +844,11 @@ function renderRouteSummary(result, scrollToSummary = true) {
   elements.deliveryTotal.textContent = result.deliveryCount;
   elements.computationTime.textContent = formatComputationTime(result.computationTimeMs);
   elements.selectedAlgorithm.textContent = getAlgorithmLabel(result.algorithm);
+  if (elements.h3Metric) {
+    elements.h3Metric.textContent = result.h3Info
+      ? `Nível ${result.h3Info.bufferK} (${result.h3Info.cellCount} hex)`
+      : (state.useH3Corridor ? "Ativo" : "Desativado");
+  }
   let cumulativeTimeSeconds = 0;
   elements.segmentList.innerHTML = result.segments.map((segment, index) => {
     cumulativeTimeSeconds += segment.travelTimeSeconds;

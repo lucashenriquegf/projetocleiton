@@ -63,6 +63,24 @@
             <input id="exploration-toggle" type="checkbox" disabled />
             <span>Mostrar caminhos explorados</span>
           </label>
+
+          <label class="exploration-option" for="h3-toggle">
+            <input id="h3-toggle" type="checkbox" checked />
+            <span>Restringir ao Corredor H3 Dinâmico</span>
+          </label>
+          <div id="h3-controls" class="h3-controls">
+            <label for="h3-res" class="speed-label">
+              Resolução H3 (tamanho do hexágono)
+              <span><strong id="h3-res-value">9</strong></span>
+            </label>
+            <input id="h3-res" type="range" min="7" max="10" value="9" step="1" />
+            <div class="range-labels"><span>7 (maior)</span><span>10 (menor)</span></div>
+
+            <label class="exploration-option" for="h3-show-polygons">
+              <input id="h3-show-polygons" type="checkbox" checked />
+              <span>Exibir hexágonos H3 no mapa</span>
+            </label>
+          </div>
         </section>
 
         <section id="route-summary" class="route-summary panel-section" hidden aria-live="polite">
@@ -74,6 +92,7 @@
             <div class="metric-card"><span>Distância</span><strong id="total-distance">—</strong></div>
             <div class="metric-card"><span>Tempo de viagem</span><strong id="estimated-time">—</strong></div>
             <div class="metric-card computation"><span>Tempo de cálculo</span><strong id="computation-time">—</strong></div>
+            <div class="metric-card"><span>Corredor H3</span><strong id="h3-metric">—</strong></div>
             <div class="metric-card"><span>Pontos</span><strong><b id="pickup-total">—</b> C · <b id="delivery-total">—</b> E</strong></div>
           </div>
           <div id="segment-list" class="segment-list"></div>
@@ -142,6 +161,7 @@
     </dialog>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="/vendor/h3-js.umd.js"></script>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

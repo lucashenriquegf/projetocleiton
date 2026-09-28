@@ -43,12 +43,82 @@ export function buildRoutingGraph(graph, { fallbackSpeedKph = 40 } = {}) {
     }
   });
 
-  return { nodes, edges, adjacency, incidentRoadNames };
+  const nodeIds = [...nodes.keys()];
+  const mainScc = nodeIds.length > 50
+    ? findLargestStronglyConnectedComponent(nodeIds, adjacency)
+    : new Set(nodeIds);
+
+  edges.forEach((edge) => {
+    edge.isRoutable = mainScc.has(edge.from) && mainScc.has(edge.to);
+  });
+
+  return { nodes, edges, adjacency, incidentRoadNames, mainScc };
+}
+
+function findLargestStronglyConnectedComponent(nodeIds, adjacency) {
+  const radj = new Map();
+  for (const id of nodeIds) radj.set(id, []);
+  for (const [from, outgoing] of adjacency) {
+    for (const edge of outgoing) {
+      radj.get(edge.to)?.push(from);
+    }
+  }
+
+  const visited = new Set();
+  const order = [];
+
+  for (const id of nodeIds) {
+    if (visited.has(id)) continue;
+    const stack = [{ u: id, idx: 0 }];
+    visited.add(id);
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      const neighbors = adjacency.get(top.u) || [];
+      if (top.idx < neighbors.length) {
+        const v = neighbors[top.idx++].to;
+        if (!visited.has(v)) {
+          visited.add(v);
+          stack.push({ u: v, idx: 0 });
+        }
+      } else {
+        order.push(top.u);
+        stack.pop();
+      }
+    }
+  }
+
+  const sccVisited = new Set();
+  let largest = new Set();
+
+  for (let i = order.length - 1; i >= 0; i--) {
+    const root = order[i];
+    if (sccVisited.has(root)) continue;
+    const component = new Set([root]);
+    sccVisited.add(root);
+    const q = [root];
+    while (q.length) {
+      const u = q.pop();
+      for (const v of (radj.get(u) || [])) {
+        if (!sccVisited.has(v)) {
+          sccVisited.add(v);
+          component.add(v);
+          q.push(v);
+        }
+      }
+    }
+    if (component.size > largest.size) {
+      largest = component;
+    }
+  }
+
+  return largest;
 }
 
 export function findNearestNode(routingGraph, latitude, longitude) {
-  let nearest = null;
-  let nearestSquaredDistance = Number.POSITIVE_INFINITY;
+  let nearestRoutable = null;
+  let nearestAny = null;
+  let nearestRoutableSqDist = Number.POSITIVE_INFINITY;
+  let nearestAnySqDist = Number.POSITIVE_INFINITY;
   const longitudeScale = Math.cos((latitude * Math.PI) / 180);
 
   for (const node of routingGraph.nodes.values()) {
@@ -56,26 +126,45 @@ export function findNearestNode(routingGraph, latitude, longitude) {
     const longitudeDelta = (node.longitude - longitude) * longitudeScale;
     const squaredDistance = latitudeDelta ** 2 + longitudeDelta ** 2;
 
-    if (squaredDistance < nearestSquaredDistance) {
-      nearest = node;
-      nearestSquaredDistance = squaredDistance;
+    if (squaredDistance < nearestAnySqDist) {
+      nearestAny = node;
+      nearestAnySqDist = squaredDistance;
+    }
+
+    if (routingGraph.mainScc?.has(node.id)) {
+      if (squaredDistance < nearestRoutableSqDist) {
+        nearestRoutable = node;
+        nearestRoutableSqDist = squaredDistance;
+      }
     }
   }
 
-  return nearest;
+  return nearestRoutable || nearestAny;
 }
 
 export function findNearestEdge(routingGraph, latitude, longitude) {
-  let nearest = null;
+  let nearestRoutable = null;
+  let nearestAny = null;
 
   for (const edge of routingGraph.edges) {
     const projection = projectPointOntoGeometry(edge.geometry, latitude, longitude);
-    if (!nearest || projection.distanceMeters < nearest.distanceMeters) {
-      nearest = { ...edge, ...projection };
+    const candidate = { ...edge, ...projection };
+
+    if (!nearestAny || projection.distanceMeters < nearestAny.distanceMeters) {
+      nearestAny = candidate;
+    }
+
+    if (edge.isRoutable) {
+      if (!nearestRoutable || projection.distanceMeters < nearestRoutable.distanceMeters) {
+        nearestRoutable = candidate;
+      }
     }
   }
 
-  return nearest;
+  if (nearestRoutable && (!nearestAny || nearestRoutable.distanceMeters <= nearestAny.distanceMeters + 500)) {
+    return nearestRoutable;
+  }
+  return nearestAny;
 }
 
 export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}) {
