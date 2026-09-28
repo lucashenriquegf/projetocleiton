@@ -47,8 +47,8 @@ export async function bidirectionalBfs({
         side.parent.set(next, current);
         side.queue.push(next);
         const expansion = side.reverse
-          ? { de: next, para: current }
-          : { de: current, para: next };
+          ? { de: next, para: current, direction: "backward" }
+          : { de: current, para: next, direction: "forward" };
         trace?.push(expansion);
         onExplore?.(expansion);
 

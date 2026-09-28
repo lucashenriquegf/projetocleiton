@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Comparação de rotas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
+    <link rel="stylesheet" href="/comparacao/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div>
+        <a href="/" class="back-link">← Roteamento</a>
+        <h1>Comparação de configurações</h1>
+      </div>
+      <span id="city-name">Carregando…</span>
+    </header>
+
+    <main>
+      <section class="setup-grid">
+        <article class="panel scenario-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Cenário comum</span><h2>Pontos da rota</h2></div>
+            <button id="clear-stops" class="text-button" type="button" disabled>Limpar</button>
+          </div>
+          <p class="helper">Selecione o tipo e clique no mapa. Os mesmos pontos e prazos serão usados por todos.</p>
+          <div class="stop-buttons">
+            <button class="stop-button pickup" type="button" data-stop-type="pickup"><span>↓</span>Coleta</button>
+            <button class="stop-button delivery" type="button" data-stop-type="delivery"><span>↑</span>Entrega</button>
+          </div>
+          <div class="scenario-map-wrap">
+            <div id="scenario-map"></div>
+            <div id="map-instruction" class="map-instruction" hidden>Clique no mapa para adicionar o ponto</div>
+            <div id="loading-map" class="loading-map">Carregando malha viária…</div>
+          </div>
+          <div class="scenario-options">
+            <label>Velocidade para vias sem dados <strong><span id="speed-value">40</span> km/h</strong></label>
+            <input id="average-speed" type="range" min="20" max="80" step="5" value="40" />
+          </div>
+          <ol id="stop-list" class="stop-list"><li class="empty">Nenhum ponto adicionado.</li></ol>
+        </article>
+
+        <article class="panel configurations-panel">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Concorrentes</span><h2>Configurações</h2></div>
+            <button id="add-configuration" class="secondary-button" type="button">+ Adicionar</button>
+          </div>
+          <p class="helper">Algoritmo, tipo e corredor H3 são definidos individualmente.</p>
+          <div id="configuration-list" class="configuration-list"></div>
+          <div class="compare-actions">
+            <button id="run-comparison" class="primary-button" type="button" disabled>Executar comparação</button>
+            <button id="cancel-comparison" class="danger-button" type="button" hidden>Cancelar</button>
+          </div>
+          <p id="comparison-status" class="comparison-status">Adicione uma coleta, uma entrega e ao menos duas configurações.</p>
+        </article>
+      </section>
+
+      <section id="results" class="results" hidden>
+        <div class="results-heading">
+          <div><span class="eyebrow">Resultados</span><h2>Comparação</h2></div>
+          <label class="sort-control">Ordenar por
+            <select id="sort-results">
+              <option value="computationTimeMs">Tempo de cálculo</option>
+              <option value="travelTimeSeconds">Tempo de viagem</option>
+              <option value="distanceMeters">Distância</option>
+              <option value="explorations">Explorações</option>
+              <option value="lateCount">Entregas atrasadas</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Configuração</th><th>Cálculo</th><th>Viagem</th><th>Distância</th><th>Explorações</th><th>H3</th><th>Prazo</th></tr></thead>
+            <tbody id="results-body"></tbody>
+          </table>
+        </div>
+
+        <div class="visual-heading">
+          <div>
+            <h2>Visualização</h2>
+            <p>As expansões são reproduzidas após o cálculo e não alteram os tempos acima.</p>
+            <div class="route-legend" aria-label="Legenda do mapa">
+              <span><i class="legend-line final"></i>Rota final</span>
+              <span><i class="legend-line forward"></i>Busca da origem</span>
+              <span><i class="legend-line backward"></i>Busca do destino</span>
+            </div>
+          </div>
+          <div class="visual-controls">
+            <label>Exibição
+              <select id="visual-mode"><option value="side-by-side">Lado a lado</option><option value="overlay">Rotas sobrepostas</option></select>
+            </label>
+            <label>Velocidade
+              <select id="playback-speed"><option value="1">1×</option><option value="4">4×</option><option value="16" selected>16×</option><option value="64">64×</option></select>
+            </label>
+            <button id="replay" class="secondary-button" type="button">Reproduzir</button>
+            <button id="pause" class="secondary-button" type="button" disabled>Pausar</button>
+          </div>
+        </div>
+        <div id="comparison-maps" class="comparison-maps"></div>
+        <div id="overlay-wrap" class="overlay-wrap" hidden><div id="overlay-map"></div><div id="overlay-legend" class="overlay-legend"></div></div>
+      </section>
+    </main>
+
+    <dialog id="deadline-dialog">
+      <form id="deadline-form">
+        <div class="dialog-heading"><div><h2 id="deadline-title">Prazo da entrega</h2><p>Quanto tempo falta até o vencimento?</p></div><button id="close-deadline" type="button" aria-label="Fechar">×</button></div>
+        <div class="deadline-parts">
+          <label><input id="deadline-days" type="number" min="0" step="1" value="0" />Dias</label>
+          <label><input id="deadline-hours" type="number" min="0" max="23" step="1" value="1" />Horas</label>
+          <label><input id="deadline-minutes" type="number" min="0" max="59" step="1" value="0" />Minutos</label>
+        </div>
+        <div class="dialog-actions"><button id="cancel-deadline" class="secondary-button" type="button">Cancelar</button><button class="primary-button compact" type="submit">Salvar prazo</button></div>
+      </form>
+    </dialog>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/vendor/leaflet/leaflet.js"></script>
+    <script src="/vendor/h3-js.umd.js"></script>
+    <script type="module" src="/comparacao/app.js"></script>
+  </body>
+</html>

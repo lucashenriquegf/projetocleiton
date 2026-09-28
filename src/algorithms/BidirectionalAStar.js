@@ -88,8 +88,8 @@ export async function bidirectionalAStar({
     if (side.parent.has(current.node)) {
       const parent = side.parent.get(current.node);
       const expansion = side.reverse
-        ? { from: current.node, to: parent }
-        : { from: parent, to: current.node };
+        ? { from: current.node, to: parent, direction: "backward" }
+        : { from: parent, to: current.node, direction: "forward" };
       trace?.push(expansion);
       onExplore?.(expansion);
     }

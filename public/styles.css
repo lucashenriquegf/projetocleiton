@@ -54,6 +54,21 @@ button, input, select { font: inherit; }
 .panel-header h1 { margin: 0; font-size: 20px; }
 .panel-header span { color: var(--muted); font-size: 11px; }
 
+.comparison-shortcut { padding: 12px 22px; border-bottom: 1px solid var(--line); }
+.comparison-shortcut a {
+  display: block;
+  padding: 9px 12px;
+  color: var(--green);
+  background: var(--green-soft);
+  border: 1px solid #cde2d4;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 750;
+  text-align: center;
+  text-decoration: none;
+}
+.comparison-shortcut a:hover { background: #dceee3; border-color: #b7d4c2; }
+
 .panel-section { padding: 18px 22px; border-bottom: 1px solid var(--line); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .section-heading h2 { margin: 0; font-size: 14px; }

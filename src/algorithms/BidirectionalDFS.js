@@ -50,8 +50,8 @@ export async function bidirectionalDfs({
       side.stack.push({ node: next, nextEdge: 0 });
 
       const expansion = side.reverse
-        ? { de: next, para: frame.node }
-        : { de: frame.node, para: next };
+        ? { de: next, para: frame.node, direction: "backward" }
+        : { de: frame.node, para: next, direction: "forward" };
       trace?.push(expansion);
       onExplore?.(expansion);
       discoveries += 1;

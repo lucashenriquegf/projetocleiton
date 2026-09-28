@@ -60,8 +60,8 @@ export async function bidirectionalDijkstra({
     if (side.parent.has(current.node)) {
       const parent = side.parent.get(current.node);
       const expansion = side.reverse
-        ? { de: current.node, para: parent }
-        : { de: parent, para: current.node };
+        ? { de: current.node, para: parent, direction: "backward" }
+        : { de: parent, para: current.node, direction: "forward" };
       trace?.push(expansion);
       onExplore?.(expansion);
     }
