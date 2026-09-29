@@ -65,6 +65,26 @@ test("cada configuração controla seu próprio corredor H3", async () => {
   assert.ok(outcome.corridorCells.length > 0);
 });
 
+test("comparação executa Greedy e Beam nos modos normal e bidirecional", async () => {
+  for (const algorithm of ["greedy", "beam"]) {
+    for (const modelType of ["normal", "bidirectional"]) {
+      const outcome = await runRouteConfiguration({
+        graph,
+        stops,
+        configuration: {
+          algorithm,
+          modelType,
+          useH3: false,
+          h3Resolution: 9,
+        },
+      });
+      assert.equal(outcome.result.error, undefined, `${algorithm} ${modelType}`);
+      assert.ok(outcome.result.distanceMeters > 0, `${algorithm} ${modelType}`);
+      assert.ok(outcome.trace.length > 0, `${algorithm} ${modelType}`);
+    }
+  }
+});
+
 test("módulo de comparação aceita cancelamento", async () => {
   const controller = new AbortController();
   controller.abort();

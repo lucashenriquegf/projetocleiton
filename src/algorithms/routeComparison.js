@@ -6,6 +6,10 @@ import { bidirectionalAStar } from "./BidirectionalAStar.js";
 import { bidirectionalBfs } from "./BidirectionalBFS.js";
 import { bidirectionalDfs } from "./BidirectionalDFS.js";
 import { bidirectionalDijkstra } from "./BidirectionalDijkstra.js";
+import { greedyBestFirst } from "./GreedyBestFirst.js";
+import { beamSearch } from "./BeamSearch.js";
+import { bidirectionalGreedyBestFirst } from "./BidirectionalGreedyBestFirst.js";
+import { bidirectionalBeamSearch } from "./BidirectionalBeamSearch.js";
 import {
   assembleMultiStopRoute,
   buildPathResult,
@@ -236,6 +240,12 @@ async function calculatePath({
     if (configuration.algorithm === "dfs") {
       return bidirectionalDfs({ ...common, onExplore });
     }
+    if (configuration.algorithm === "greedy") {
+      return bidirectionalGreedyBestFirst({ ...common, cost: "time", onExplore });
+    }
+    if (configuration.algorithm === "beam") {
+      return bidirectionalBeamSearch({ ...common, cost: "time", onExplore });
+    }
     return bidirectionalBfs({ ...common, onExplore });
   }
 
@@ -256,6 +266,20 @@ async function calculatePath({
   if (configuration.algorithm === "dfs") {
     return dfs({
       ...common,
+      onExplore: (event) => onExplore?.({ ...event, direction: "forward" }),
+    });
+  }
+  if (configuration.algorithm === "greedy") {
+    return greedyBestFirst({
+      ...common,
+      cost: "time",
+      onExplore: (event) => onExplore?.({ ...event, direction: "forward" }),
+    });
+  }
+  if (configuration.algorithm === "beam") {
+    return beamSearch({
+      ...common,
+      cost: "time",
       onExplore: (event) => onExplore?.({ ...event, direction: "forward" }),
     });
   }

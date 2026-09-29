@@ -21,6 +21,10 @@ import { bidirectionalAStar } from "/algorithms/BidirectionalAStar.js";
 import { bidirectionalBfs } from "/algorithms/BidirectionalBFS.js";
 import { bidirectionalDfs } from "/algorithms/BidirectionalDFS.js";
 import { bidirectionalDijkstra } from "/algorithms/BidirectionalDijkstra.js";
+import { greedyBestFirst } from "/algorithms/GreedyBestFirst.js";
+import { beamSearch } from "/algorithms/BeamSearch.js";
+import { bidirectionalGreedyBestFirst } from "/algorithms/BidirectionalGreedyBestFirst.js";
+import { bidirectionalBeamSearch } from "/algorithms/BidirectionalBeamSearch.js";
 
 const state = {
   graph: null,
@@ -646,6 +650,20 @@ async function calculatePathWithSelectedAlgorithm(
         onExplore: ({ de, para }) => recordExplorationProgress(routingGraph, de, para),
       });
     }
+    if (algorithm === "greedy") {
+      return bidirectionalGreedyBestFirst({
+        ...progress,
+        cost: "time",
+        onExplore: ({ from, to }) => recordExplorationProgress(routingGraph, from, to),
+      });
+    }
+    if (algorithm === "beam") {
+      return bidirectionalBeamSearch({
+        ...progress,
+        cost: "time",
+        onExplore: ({ from, to }) => recordExplorationProgress(routingGraph, from, to),
+      });
+    }
     return bidirectionalBfs({
       ...progress,
       onExplore: ({ de, para }) => recordExplorationProgress(routingGraph, de, para),
@@ -683,6 +701,30 @@ async function calculatePathWithSelectedAlgorithm(
       signal,
       onExplore: ({ de, para }) =>
         recordExplorationProgress(routingGraph, de, para),
+      yieldControl: () => yieldExplorationBatch(signal),
+      yieldEvery: SEARCH_BATCH_SIZE,
+    });
+  }
+
+  if (algorithm === "greedy") {
+    return greedyBestFirst({
+      ...parameters,
+      cost: "time",
+      signal,
+      onExplore: ({ from, to }) =>
+        recordExplorationProgress(routingGraph, from, to),
+      yieldControl: () => yieldExplorationBatch(signal),
+      yieldEvery: SEARCH_BATCH_SIZE,
+    });
+  }
+
+  if (algorithm === "beam") {
+    return beamSearch({
+      ...parameters,
+      cost: "time",
+      signal,
+      onExplore: ({ from, to }) =>
+        recordExplorationProgress(routingGraph, from, to),
       yieldControl: () => yieldExplorationBatch(signal),
       yieldEvery: SEARCH_BATCH_SIZE,
     });
@@ -1105,6 +1147,8 @@ function getAlgorithmLabel(value) {
     bfs: "BFS",
     dfs: "DFS",
     dijkstra: "Dijkstra",
+    greedy: "Greedy Best-First",
+    beam: "Beam Search",
   }[value] || value;
 }
 

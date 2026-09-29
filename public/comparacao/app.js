@@ -7,7 +7,14 @@ import { getHexagonBoundaries } from "/algorithms/h3_corridor.js";
 import { runRouteConfiguration } from "/algorithms/routeComparison.js";
 
 const COLORS = ["#176b43", "#2563a7", "#dc6d2d", "#7c3ba8", "#b2455b", "#14818b", "#7a6420", "#4f5db6"];
-const ALGORITHM_LABELS = { astar: "A*", bfs: "BFS", dfs: "DFS", dijkstra: "Dijkstra" };
+const ALGORITHM_LABELS = {
+  astar: "A*",
+  bfs: "BFS",
+  dfs: "DFS",
+  dijkstra: "Dijkstra",
+  greedy: "Greedy Best-First",
+  beam: "Beam Search",
+};
 
 const state = {
   graph: null,
@@ -508,6 +515,8 @@ function renderConfigurations() {
           <option value="bfs" ${configuration.algorithm === "bfs" ? "selected" : ""}>BFS</option>
           <option value="dfs" ${configuration.algorithm === "dfs" ? "selected" : ""}>DFS</option>
           <option value="dijkstra" ${configuration.algorithm === "dijkstra" ? "selected" : ""}>Dijkstra</option>
+          <option value="greedy" ${configuration.algorithm === "greedy" ? "selected" : ""}>Greedy Best-First</option>
+          <option value="beam" ${configuration.algorithm === "beam" ? "selected" : ""}>Beam Search</option>
         </select></label>
         <label>Tipo<select class="model-type"><option value="normal" ${configuration.modelType === "normal" ? "selected" : ""}>Normal</option><option value="bidirectional" ${configuration.modelType === "bidirectional" ? "selected" : ""}>Bidirecional</option></select></label>
         <div class="h3-field">
