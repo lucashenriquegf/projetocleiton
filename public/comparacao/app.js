@@ -27,8 +27,10 @@ const state = {
   editingDeliveryId: null,
   configurations: [],
   configurationCounter: 0,
+  collapsedConfigurationGroups: new Set(),
   currentController: null,
   results: [],
+  collapsedResultGroups: new Set(),
   selectedResultIds: new Set(),
   resultMaps: [],
   overlayMap: null,
@@ -47,6 +49,7 @@ const elements = {
   clearStops: document.querySelector("#clear-stops"),
   stopList: document.querySelector("#stop-list"),
   averageSpeed: document.querySelector("#average-speed"),
+  speedValue: document.querySelector("#speed-value"),
   groupAddToggle: document.querySelector("#group-add-toggle"),
   groupAddMenu: document.querySelector("#group-add-menu"),
   selectAllAlgos: document.querySelector("#select-all-algos"),
@@ -56,6 +59,9 @@ const elements = {
   groupReplaceExisting: document.querySelector("#group-replace-existing"),
   clearConfigurations: document.querySelector("#clear-configurations"),
   configurationList: document.querySelector("#configuration-list"),
+  configurationSummary: document.querySelector("#configuration-summary"),
+  expandConfigurationGroups: document.querySelector("#expand-configuration-groups"),
+  collapseConfigurationGroups: document.querySelector("#collapse-configuration-groups"),
   addConfiguration: document.querySelector("#add-configuration"),
 
 
@@ -64,7 +70,9 @@ const elements = {
   comparisonStatus: document.querySelector("#comparison-status"),
   results: document.querySelector("#results"),
   resultsBody: document.querySelector("#results-body"),
+  scoreboardMode: document.querySelector("#scoreboard-mode"),
   sortResults: document.querySelector("#sort-results"),
+  sortSecondary: document.querySelector("#sort-secondary"),
   visualMode: document.querySelector("#visual-mode"),
   playbackSpeed: document.querySelector("#playback-speed"),
   replay: document.querySelector("#replay"),
@@ -161,9 +169,32 @@ function bindEvents() {
 
 
   elements.clearConfigurations.addEventListener("click", clearConfigurations);
+  elements.expandConfigurationGroups.addEventListener("click", () => {
+    state.collapsedConfigurationGroups.clear();
+    renderConfigurations();
+  });
+  elements.collapseConfigurationGroups.addEventListener("click", () => {
+    state.collapsedConfigurationGroups = new Set(
+      state.configurations.map(({ algorithm }) => algorithm),
+    );
+    renderConfigurations();
+  });
   elements.runComparison.addEventListener("click", runComparison);
   elements.cancelComparison.addEventListener("click", cancelComparison);
-  elements.sortResults.addEventListener("change", renderResultsTable);
+  elements.scoreboardMode.addEventListener("change", renderResultsTable);
+  elements.sortResults.addEventListener("change", () => {
+    if (elements.sortSecondary.value === elements.sortResults.value) {
+      elements.sortSecondary.value = "none";
+    }
+    renderResultsTable();
+  });
+  elements.sortSecondary.addEventListener("change", () => {
+    if (elements.sortSecondary.value === elements.sortResults.value) {
+      elements.sortSecondary.value = "none";
+      showToast("O critério de desempate deve ser diferente do primeiro critério.");
+    }
+    renderResultsTable();
+  });
   elements.visualMode.addEventListener("change", updateVisualMode);
   elements.replay.addEventListener("click", startPlayback);
   elements.pause.addEventListener("click", togglePlaybackPause);
@@ -321,8 +352,16 @@ function saveDeadline(event) {
 }
 
 function addConfiguration(template = null) {
+  const configuration = createConfiguration(template);
+  state.configurations.push(configuration);
+  state.collapsedConfigurationGroups.delete(configuration.algorithm);
+  renderConfigurations();
+  invalidateResults();
+}
+
+function createConfiguration(template = null) {
   state.configurationCounter += 1;
-  const configuration = {
+  return {
     id: `configuration-${Date.now()}-${state.configurationCounter}-${Math.random().toString(36).slice(2, 6)}`,
     number: state.configurationCounter,
     color: COLORS[(state.configurationCounter - 1) % COLORS.length],
@@ -331,9 +370,6 @@ function addConfiguration(template = null) {
     useH3: template?.useH3 ?? true,
     h3Resolution: Number(template?.h3Resolution) || 9,
   };
-  state.configurations.push(configuration);
-  renderConfigurations();
-  invalidateResults();
 }
 
 function toggleGroupMenu(forceState) {
@@ -439,8 +475,12 @@ function handleGroupConfirmAdd() {
     loadConfigurations(newConfigs);
   } else {
     for (const config of newConfigs) {
-      addConfiguration(config);
+      state.configurations.push(createConfiguration(config));
     }
+    const algorithms = groupConfigurationsByAlgorithm().map(([algorithm]) => algorithm);
+    state.collapsedConfigurationGroups = new Set(algorithms.slice(1));
+    renderConfigurations();
+    invalidateResults();
     showToast(`${newConfigs.length} configurações adicionadas.`);
   }
 
@@ -454,17 +494,11 @@ function loadConfigurations(configsList) {
   state.configurationCounter = 0;
 
   for (const item of configsList) {
-    state.configurationCounter += 1;
-    state.configurations.push({
-      id: `configuration-${Date.now()}-${state.configurationCounter}-${Math.random().toString(36).slice(2, 6)}`,
-      number: state.configurationCounter,
-      color: COLORS[(state.configurationCounter - 1) % COLORS.length],
-      algorithm: item.algorithm || "dijkstra",
-      modelType: item.modelType || "normal",
-      useH3: item.useH3 ?? true,
-      h3Resolution: Number(item.h3Resolution) || 9,
-    });
+    state.configurations.push(createConfiguration(item));
   }
+
+  const algorithms = [...new Set(state.configurations.map(({ algorithm }) => algorithm))];
+  state.collapsedConfigurationGroups = new Set(algorithms.slice(1));
 
   renderConfigurations();
   invalidateResults();
@@ -482,6 +516,7 @@ function clearConfigurations() {
   if (state.currentController) return;
   state.configurations = [];
   state.configurationCounter = 0;
+  state.collapsedConfigurationGroups.clear();
   renderConfigurations();
   invalidateResults();
   updateReadyState();
@@ -490,6 +525,11 @@ function clearConfigurations() {
 
 function renderConfigurations() {
   elements.configurationList.innerHTML = "";
+  const grouped = groupConfigurationsByAlgorithm();
+  elements.configurationSummary.textContent = `${state.configurations.length} configuraç${state.configurations.length === 1 ? "ão" : "ões"} em ${grouped.length} grupo${grouped.length === 1 ? "" : "s"}`;
+  elements.expandConfigurationGroups.disabled = grouped.length === 0;
+  elements.collapseConfigurationGroups.disabled = grouped.length === 0;
+
   if (!state.configurations.length) {
     elements.configurationList.innerHTML = `
       <div class="empty-configurations">
@@ -500,52 +540,111 @@ function renderConfigurations() {
     return;
   }
 
-  state.configurations.forEach((configuration, index) => {
-    const card = document.createElement("div");
-    card.className = "configuration-card";
-    card.style.setProperty("--config-color", configuration.color);
-    card.innerHTML = `
-      <div class="configuration-title">
-        <strong>Configuração ${index + 1}</strong>
-        <span class="configuration-actions"><button class="icon-button duplicate" type="button">Duplicar</button><button class="icon-button remove" type="button">Remover</button></span>
+  for (const [algorithm, configurations] of grouped) {
+    const group = document.createElement("section");
+    const collapsed = state.collapsedConfigurationGroups.has(algorithm);
+    const normalCount = configurations.filter(({ modelType }) => modelType === "normal").length;
+    const bidirectionalCount = configurations.length - normalCount;
+    group.className = "configuration-group";
+    group.style.setProperty("--group-color", configurations[0].color);
+    group.innerHTML = `
+      <div class="configuration-group-header">
+        <button class="configuration-group-toggle" type="button" aria-expanded="${!collapsed}">
+          <span class="group-chevron" aria-hidden="true">${collapsed ? "▸" : "▾"}</span>
+          <strong>${escapeHtml(ALGORITHM_LABELS[algorithm] || algorithm)}</strong>
+          <span class="group-count">${configurations.length} configuraç${configurations.length === 1 ? "ão" : "ões"}</span>
+          <span class="group-breakdown">${normalCount} normal · ${bidirectionalCount} bidirecional</span>
+        </button>
+        <button class="icon-button remove-configuration-group" type="button">Remover grupo</button>
       </div>
-      <div class="configuration-fields">
-        <label>Algoritmo<select class="algorithm">
-          <option value="astar" ${configuration.algorithm === "astar" ? "selected" : ""}>A*</option>
-          <option value="bfs" ${configuration.algorithm === "bfs" ? "selected" : ""}>BFS</option>
-          <option value="dfs" ${configuration.algorithm === "dfs" ? "selected" : ""}>DFS</option>
-          <option value="dijkstra" ${configuration.algorithm === "dijkstra" ? "selected" : ""}>Dijkstra</option>
-          <option value="greedy" ${configuration.algorithm === "greedy" ? "selected" : ""}>Greedy Best-First</option>
-          <option value="beam" ${configuration.algorithm === "beam" ? "selected" : ""}>Beam Search</option>
-        </select></label>
-        <label>Tipo<select class="model-type"><option value="normal" ${configuration.modelType === "normal" ? "selected" : ""}>Normal</option><option value="bidirectional" ${configuration.modelType === "bidirectional" ? "selected" : ""}>Bidirecional</option></select></label>
-        <div class="h3-field">
-          <label class="h3-toggle"><input class="use-h3" type="checkbox" ${configuration.useH3 ? "checked" : ""} />Usar corredor H3</label>
-          <label class="h3-resolution-field">
-            <span class="h3-resolution-heading">Tamanho da célula <strong class="h3-resolution-value">${configuration.h3Resolution}</strong></span>
-            <input class="h3-resolution" type="range" min="7" max="10" step="1" value="${configuration.h3Resolution}" ${configuration.useH3 ? "" : "disabled"} />
-            <span class="h3-resolution-labels"><span>7 (maior)</span><span>10 (menor)</span></span>
-          </label>
-        </div>
-      </div>`;
-    card.querySelector(".algorithm").addEventListener("change", (event) => updateConfiguration(configuration.id, { algorithm: event.target.value }));
-    card.querySelector(".model-type").addEventListener("change", (event) => updateConfiguration(configuration.id, { modelType: event.target.value }));
-    card.querySelector(".use-h3").addEventListener("change", (event) => updateConfiguration(configuration.id, { useH3: event.target.checked }));
-    card.querySelector(".h3-resolution").addEventListener("input", (event) => {
-      configuration.h3Resolution = Number(event.target.value);
-      card.querySelector(".h3-resolution-value").textContent = event.target.value;
-      invalidateResults();
+      <div class="configuration-group-body" ${collapsed ? "hidden" : ""}></div>`;
+
+    const body = group.querySelector(".configuration-group-body");
+    for (const modelType of ["normal", "bidirectional"]) {
+      const variations = configurations.filter((configuration) => configuration.modelType === modelType);
+      if (!variations.length) continue;
+      const subgroup = document.createElement("section");
+      subgroup.className = "configuration-subgroup";
+      subgroup.innerHTML = `<h3>${modelType === "bidirectional" ? "Bidirecional" : "Normal"}<span>${variations.length}</span></h3><div class="configuration-rows"></div>`;
+      const rows = subgroup.querySelector(".configuration-rows");
+      variations.forEach((configuration) => rows.appendChild(createConfigurationRow(configuration)));
+      body.appendChild(subgroup);
+    }
+
+    group.querySelector(".configuration-group-toggle").addEventListener("click", () => {
+      if (state.collapsedConfigurationGroups.has(algorithm)) {
+        state.collapsedConfigurationGroups.delete(algorithm);
+      } else {
+        state.collapsedConfigurationGroups.add(algorithm);
+      }
+      renderConfigurations();
     });
-    card.querySelector(".duplicate").addEventListener("click", () => addConfiguration(configuration));
-    card.querySelector(".remove").addEventListener("click", () => {
+    group.querySelector(".remove-configuration-group").addEventListener("click", () => {
       if (state.currentController) return;
-      state.configurations = state.configurations.filter((candidate) => candidate.id !== configuration.id);
+      state.configurations = state.configurations.filter((configuration) => configuration.algorithm !== algorithm);
+      state.collapsedConfigurationGroups.delete(algorithm);
       renderConfigurations();
       invalidateResults();
     });
-    elements.configurationList.appendChild(card);
-  });
+    elements.configurationList.appendChild(group);
+  }
   updateReadyState();
+}
+
+function groupConfigurationsByAlgorithm() {
+  const groups = new Map();
+  for (const configuration of state.configurations) {
+    if (!groups.has(configuration.algorithm)) groups.set(configuration.algorithm, []);
+    groups.get(configuration.algorithm).push(configuration);
+  }
+  return [...groups.entries()].sort(
+    ([first], [second]) => algorithmOrder(first) - algorithmOrder(second),
+  );
+}
+
+function algorithmOrder(algorithm) {
+  const order = ["astar", "dijkstra", "bfs", "dfs", "greedy", "beam"];
+  const index = order.indexOf(algorithm);
+  return index < 0 ? order.length : index;
+}
+
+function algorithmOptions(selected) {
+  return Object.entries(ALGORITHM_LABELS)
+    .map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${escapeHtml(label)}</option>`)
+    .join("");
+}
+
+function createConfigurationRow(configuration) {
+  const row = document.createElement("div");
+  row.className = "configuration-row";
+  row.style.setProperty("--config-color", configuration.color);
+  row.innerHTML = `
+    <span class="configuration-row-number"><i></i>#${configuration.number}</span>
+    <label class="configuration-compact-field"><span>Algoritmo</span><select class="algorithm">${algorithmOptions(configuration.algorithm)}</select></label>
+    <label class="configuration-compact-field"><span>Tipo</span><select class="model-type"><option value="normal" ${configuration.modelType === "normal" ? "selected" : ""}>Normal</option><option value="bidirectional" ${configuration.modelType === "bidirectional" ? "selected" : ""}>Bidirecional</option></select></label>
+    <label class="configuration-h3-toggle"><span>Corredor H3</span><span class="configuration-check"><input class="use-h3" type="checkbox" ${configuration.useH3 ? "checked" : ""} /> Usar</span></label>
+    <label class="configuration-resolution"><span>Célula <strong class="h3-resolution-value">${configuration.h3Resolution}</strong></span><input class="h3-resolution" type="range" min="7" max="10" step="1" value="${configuration.h3Resolution}" ${configuration.useH3 ? "" : "disabled"} /></label>
+    <span class="configuration-actions"><button class="icon-button duplicate" type="button">Duplicar</button><button class="icon-button remove" type="button">Remover</button></span>`;
+
+  row.querySelector(".algorithm").addEventListener("change", (event) => {
+    state.collapsedConfigurationGroups.delete(event.target.value);
+    updateConfiguration(configuration.id, { algorithm: event.target.value });
+  });
+  row.querySelector(".model-type").addEventListener("change", (event) => updateConfiguration(configuration.id, { modelType: event.target.value }));
+  row.querySelector(".use-h3").addEventListener("change", (event) => updateConfiguration(configuration.id, { useH3: event.target.checked }));
+  row.querySelector(".h3-resolution").addEventListener("input", (event) => {
+    configuration.h3Resolution = Number(event.target.value);
+    row.querySelector(".h3-resolution-value").textContent = event.target.value;
+    invalidateResults();
+  });
+  row.querySelector(".duplicate").addEventListener("click", () => addConfiguration(configuration));
+  row.querySelector(".remove").addEventListener("click", () => {
+    if (state.currentController) return;
+    state.configurations = state.configurations.filter((candidate) => candidate.id !== configuration.id);
+    renderConfigurations();
+    invalidateResults();
+  });
+  return row;
 }
 
 
@@ -839,6 +938,10 @@ async function runComparison() {
         .slice(0, 2)
         .map((record) => record.configuration.id),
     );
+    const rankedGroups = groupResultsByAlgorithm(getSortCriteria());
+    state.collapsedResultGroups = new Set(
+      rankedGroups.slice(1).map(({ algorithm }) => algorithm),
+    );
     renderResultsTable();
     refreshVisualizations();
     elements.results.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -873,14 +976,16 @@ function cancelComparison() {
 
 function setConfigurationControlsDisabled(disabled) {
   if (elements.groupAddToggle) elements.groupAddToggle.disabled = disabled;
+  if (elements.expandConfigurationGroups) elements.expandConfigurationGroups.disabled = disabled;
+  if (elements.collapseConfigurationGroups) elements.collapseConfigurationGroups.disabled = disabled;
   if (disabled && elements.groupAddMenu && !elements.groupAddMenu.hidden) toggleGroupMenu(false);
   if (elements.clearConfigurations) elements.clearConfigurations.disabled = disabled;
   elements.configurationList.querySelectorAll("button, select, input").forEach((control) => { control.disabled = disabled; });
 
 
   if (!disabled) {
-    elements.configurationList.querySelectorAll(".configuration-card").forEach((card) => {
-      card.querySelector(".h3-resolution").disabled = !card.querySelector(".use-h3").checked;
+    elements.configurationList.querySelectorAll(".configuration-row").forEach((row) => {
+      row.querySelector(".h3-resolution").disabled = !row.querySelector(".use-h3").checked;
     });
   }
   elements.averageSpeed.disabled = disabled;
@@ -888,37 +993,194 @@ function setConfigurationControlsDisabled(disabled) {
 }
 
 function renderResultsTable() {
-  const metric = elements.sortResults.value;
-  const sorted = [...state.results].sort((first, second) => metricValue(first, metric) - metricValue(second, metric));
-  const best = sorted.find((record) => !record.error);
-  elements.resultsBody.innerHTML = sorted.map((record) => {
-    const result = record.outcome?.result;
-    const info = record.outcome?.h3Info;
-    const deadlines = record.outcome?.deadlineInfo || { lateCount: 0, onTimeCount: 0 };
-    const isVisible = state.selectedResultIds.has(record.configuration.id);
-    if (record.error) {
-      return `<tr><td><span class="result-name" style="--config-color:${record.configuration.color}"><i class="color-dot"></i>${escapeHtml(configurationLabel(record.configuration))}</span></td><td colspan="6" class="failed">${escapeHtml(record.error)}</td><td><select class="result-visibility" disabled><option>Indisponível</option></select></td></tr>`;
-    }
-    return `<tr class="${record === best ? "best" : ""}">
-      <td><span class="result-name" style="--config-color:${record.configuration.color}"><i class="color-dot"></i>${escapeHtml(configurationLabel(record.configuration))}${record === best ? '<span class="winner">Melhor no critério</span>' : ""}</span></td>
-      <td>${formatComputationTime(record.computationTimeMs)}</td>
-      <td>${formatDuration(result.travelTimeSeconds)}</td>
-      <td>${formatDistance(result.distanceMeters)}</td>
-      <td>${record.outcome.trace.length.toLocaleString("pt-BR")}</td>
-      <td>${info ? `Célula ${info.resolution} · buffer ${info.bufferK} · ${info.cellCount.toLocaleString("pt-BR")} hex` : "Desativado"}</td>
-      <td class="${deadlines.lateCount ? "failed" : ""}">${deadlines.lateCount ? `${deadlines.lateCount} atrasada(s)` : `${deadlines.onTimeCount} no prazo`}</td>
-      <td><select class="result-visibility ${isVisible ? "showing" : ""}" data-configuration-id="${escapeHtml(record.configuration.id)}"><option value="show" ${isVisible ? "selected" : ""}>Exibir no mapa</option><option value="hide" ${isVisible ? "" : "selected"}>Não exibir</option></select></td>
-    </tr>`;
-  }).join("");
-  elements.resultsBody.querySelectorAll(".result-visibility[data-configuration-id]").forEach((select) => {
-    select.addEventListener("change", () => {
-      const configurationId = select.dataset.configurationId;
-      if (select.value === "show") state.selectedResultIds.add(configurationId);
+  const criteria = getSortCriteria();
+  if (elements.scoreboardMode.value === "grouped") {
+    elements.resultsBody.innerHTML = renderGroupedScoreboard(criteria);
+  } else {
+    const ranked = rankResultRecords(sortResultRecords(state.results, criteria), criteria);
+    const leaders = ranked.filter(({ rank }) => rank === 1).length;
+    elements.resultsBody.innerHTML = ranked
+      .map(({ record, rank }) => resultRowHtml(
+        record,
+        rank === 1 ? (leaders > 1 ? "Empate no topo" : "Melhor no placar") : "",
+        rank,
+      ))
+      .join("");
+  }
+
+  elements.resultsBody.querySelectorAll(".result-visibility[data-configuration-id]").forEach((checkbox) => {
+    checkbox.addEventListener("change", () => {
+      const configurationId = checkbox.dataset.configurationId;
+      if (checkbox.checked) state.selectedResultIds.add(configurationId);
       else state.selectedResultIds.delete(configurationId);
-      select.classList.toggle("showing", select.value === "show");
       refreshVisualizations();
     });
   });
+  elements.resultsBody.querySelectorAll(".result-group-toggle[data-algorithm]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const algorithm = button.dataset.algorithm;
+      if (state.collapsedResultGroups.has(algorithm)) state.collapsedResultGroups.delete(algorithm);
+      else state.collapsedResultGroups.add(algorithm);
+      renderResultsTable();
+    });
+  });
+}
+
+function renderGroupedScoreboard(criteria) {
+  const rankedGroups = rankAlgorithmGroups(groupResultsByAlgorithm(criteria), criteria);
+  return rankedGroups.map(({ group, rank, primaryTie, completeTie }) => {
+    const collapsed = state.collapsedResultGroups.has(group.algorithm);
+    const validCount = group.records.filter((record) => !record.error).length;
+    const selectedCount = group.records.filter((record) =>
+      state.selectedResultIds.has(record.configuration.id),
+    ).length;
+    const groupHeader = `<tr class="result-group-header"><td colspan="8"><button class="result-group-toggle" type="button" data-algorithm="${escapeHtml(group.algorithm)}" aria-expanded="${!collapsed}">
+      <span class="result-group-chevron">${collapsed ? "▸" : "▾"}</span>
+      <span class="result-group-rank">${rank ? `${rank}º` : "—"}</span>
+      <strong>${escapeHtml(ALGORITHM_LABELS[group.algorithm] || group.algorithm)}</strong>
+      <span>${group.records.length} configuraç${group.records.length === 1 ? "ão" : "ões"}${validCount !== group.records.length ? ` · ${group.records.length - validCount} falha(s)` : ""}</span>
+      <span class="result-group-score"><b>${metricLabel(criteria[0])}: ${formatMetricValue(group.best, criteria[0])}</b>${criteria[1] ? `<em>Desempate · ${metricLabel(criteria[1])}: ${formatMetricValue(group.best, criteria[1])}</em>` : ""}</span>
+      ${completeTie ? '<span class="result-group-tie complete">Empate</span>' : (primaryTie && criteria[1] ? `<span class="result-group-tie">Desempatado por ${escapeHtml(metricLabel(criteria[1]).toLowerCase())}</span>` : "")}
+      ${selectedCount ? `<span class="result-group-selected">${selectedCount} no mapa</span>` : ""}
+    </button></td></tr>`;
+    if (collapsed) return groupHeader;
+    const rankedRecords = rankResultRecords(group.records, criteria);
+    const leaders = rankedRecords.filter(({ rank: recordRank }) => recordRank === 1).length;
+    return groupHeader + rankedRecords
+      .map(({ record, rank: recordRank }) => resultRowHtml(
+        record,
+        recordRank === 1 ? (leaders > 1 ? "Empate no grupo" : "Melhor do grupo") : "",
+        recordRank,
+      ))
+      .join("");
+  }).join("");
+}
+
+function groupResultsByAlgorithm(criteria) {
+  const groups = new Map();
+  for (const record of state.results) {
+    const algorithm = record.configuration.algorithm;
+    if (!groups.has(algorithm)) groups.set(algorithm, []);
+    groups.get(algorithm).push(record);
+  }
+  return [...groups.entries()]
+    .map(([algorithm, records]) => {
+      const sorted = sortResultRecords(records, criteria);
+      const best = sorted.find((record) => !record.error) || null;
+      return {
+        algorithm,
+        records: sorted,
+        best,
+      };
+    })
+    .sort((first, second) => {
+      if (!first.best && !second.best) return algorithmOrder(first.algorithm) - algorithmOrder(second.algorithm);
+      if (!first.best) return 1;
+      if (!second.best) return -1;
+      return compareRecordsByCriteria(first.best, second.best, criteria) ||
+        algorithmOrder(first.algorithm) - algorithmOrder(second.algorithm);
+    });
+}
+
+function getSortCriteria() {
+  const primary = elements.sortResults.value;
+  const secondary = elements.sortSecondary.value;
+  return secondary !== "none" && secondary !== primary
+    ? [primary, secondary]
+    : [primary];
+}
+
+function sortResultRecords(records, criteria) {
+  return [...records].sort((first, second) =>
+    compareRecordsByCriteria(first, second, criteria) ||
+    algorithmOrder(first.configuration.algorithm) - algorithmOrder(second.configuration.algorithm) ||
+    first.configuration.number - second.configuration.number,
+  );
+}
+
+function compareRecordsByCriteria(first, second, criteria) {
+  for (const metric of criteria) {
+    const firstValue = metricValue(first, metric);
+    const secondValue = metricValue(second, metric);
+    if (firstValue < secondValue) return -1;
+    if (firstValue > secondValue) return 1;
+  }
+  return 0;
+}
+
+function rankResultRecords(records, criteria) {
+  let lastValid = null;
+  let lastRank = 0;
+  let validPosition = 0;
+  return records.map((record) => {
+    if (record.error) return { record, rank: null };
+    validPosition += 1;
+    const tied = lastValid && compareRecordsByCriteria(lastValid, record, criteria) === 0;
+    const rank = tied ? lastRank : validPosition;
+    lastValid = record;
+    lastRank = rank;
+    return { record, rank };
+  });
+}
+
+function rankAlgorithmGroups(groups, criteria) {
+  let lastGroup = null;
+  let lastRank = 0;
+  let validPosition = 0;
+  return groups.map((group) => {
+    if (!group.best) return { group, rank: null, primaryTie: false, completeTie: false };
+    validPosition += 1;
+    const completeTie = Boolean(
+      lastGroup?.best && compareRecordsByCriteria(lastGroup.best, group.best, criteria) === 0,
+    );
+    const primaryTie = Boolean(
+      lastGroup?.best && metricValue(lastGroup.best, criteria[0]) === metricValue(group.best, criteria[0]),
+    );
+    const rank = completeTie ? lastRank : validPosition;
+    lastGroup = group;
+    lastRank = rank;
+    return { group, rank, primaryTie, completeTie };
+  });
+}
+
+function resultRowHtml(record, winnerLabel = "", rank = null) {
+  const result = record.outcome?.result;
+  const info = record.outcome?.h3Info;
+  const deadlines = record.outcome?.deadlineInfo || { lateCount: 0, onTimeCount: 0 };
+  const isVisible = state.selectedResultIds.has(record.configuration.id);
+  if (record.error) {
+    return `<tr><td><span class="result-name" style="--config-color:${record.configuration.color}"><span class="result-position unavailable">—</span><i class="color-dot"></i>${escapeHtml(configurationLabel(record.configuration))}</span></td><td colspan="6" class="failed">${escapeHtml(record.error)}</td><td class="visualization-cell"><label class="result-visibility-toggle unavailable" title="Resultado indisponível"><input type="checkbox" disabled /><span>Indisponível</span></label></td></tr>`;
+  }
+  return `<tr class="${winnerLabel ? "best" : ""}">
+    <td><span class="result-name" style="--config-color:${record.configuration.color}"><span class="result-position">${rank ? `${rank}º` : "—"}</span><i class="color-dot"></i>${escapeHtml(configurationLabel(record.configuration))}${winnerLabel ? `<span class="winner">${escapeHtml(winnerLabel)}</span>` : ""}</span></td>
+    <td>${formatComputationTime(record.computationTimeMs)}</td>
+    <td>${formatDuration(result.travelTimeSeconds)}</td>
+    <td>${formatDistance(result.distanceMeters)}</td>
+    <td>${record.outcome.trace.length.toLocaleString("pt-BR")}</td>
+    <td>${info ? `Célula ${info.resolution} · buffer ${info.bufferK} · ${info.cellCount.toLocaleString("pt-BR")} hex` : "Desativado"}</td>
+    <td class="${deadlines.lateCount ? "failed" : ""}">${deadlines.lateCount ? `${deadlines.lateCount} atrasada(s)` : `${deadlines.onTimeCount} no prazo`}</td>
+    <td class="visualization-cell"><label class="result-visibility-toggle"><input class="result-visibility" type="checkbox" data-configuration-id="${escapeHtml(record.configuration.id)}" ${isVisible ? "checked" : ""} /><span>Exibir</span></label></td>
+  </tr>`;
+}
+
+function metricLabel(metric) {
+  return {
+    computationTimeMs: "Tempo de cálculo",
+    travelTimeSeconds: "Tempo de viagem",
+    distanceMeters: "Distância",
+    explorations: "Explorações",
+    lateCount: "Entregas atrasadas",
+  }[metric] || metric;
+}
+
+function formatMetricValue(record, metric) {
+  if (!record) return "Indisponível";
+  if (metric === "computationTimeMs") return formatComputationTime(record.computationTimeMs);
+  if (metric === "travelTimeSeconds") return formatDuration(record.outcome.result.travelTimeSeconds);
+  if (metric === "distanceMeters") return formatDistance(record.outcome.result.distanceMeters);
+  if (metric === "explorations") return record.outcome.trace.length.toLocaleString("pt-BR");
+  if (metric === "lateCount") return `${record.outcome.deadlineInfo.lateCount} atrasada(s)`;
+  return "—";
 }
 
 function metricValue(record, metric) {
@@ -1139,6 +1401,7 @@ function invalidateResults() {
   if (state.currentController) return;
   stopPlayback();
   state.results = [];
+  state.collapsedResultGroups.clear();
   state.selectedResultIds.clear();
   state.visualRoutingGraph = null;
   elements.results.hidden = true;

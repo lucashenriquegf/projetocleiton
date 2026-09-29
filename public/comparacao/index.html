@@ -156,6 +156,13 @@
           </div>
 
           <p class="helper">Algoritmo, tipo e corredor H3 são definidos individualmente.</p>
+          <div class="configuration-organizer">
+            <span id="configuration-summary">0 configurações</span>
+            <div>
+              <button id="expand-configuration-groups" class="text-button" type="button">Expandir todos</button>
+              <button id="collapse-configuration-groups" class="text-button" type="button">Recolher todos</button>
+            </div>
+          </div>
 
           <div id="configuration-list" class="configuration-list"></div>
           <div class="compare-actions">
@@ -169,15 +176,33 @@
       <section id="results" class="results" hidden>
         <div class="results-heading">
           <div><span class="eyebrow">Resultados</span><h2>Comparação</h2></div>
-          <label class="sort-control">Ordenar por
-            <select id="sort-results">
-              <option value="computationTimeMs">Tempo de cálculo</option>
-              <option value="travelTimeSeconds">Tempo de viagem</option>
-              <option value="distanceMeters">Distância</option>
-              <option value="explorations">Explorações</option>
-              <option value="lateCount">Entregas atrasadas</option>
-            </select>
-          </label>
+          <div class="scoreboard-controls">
+            <label class="sort-control">Modo do placar
+              <select id="scoreboard-mode">
+                <option value="flat" selected>Placar geral</option>
+                <option value="grouped">Comparação por algoritmo</option>
+              </select>
+            </label>
+            <label class="sort-control">1º critério
+              <select id="sort-results">
+                <option value="computationTimeMs">Tempo de cálculo</option>
+                <option value="travelTimeSeconds">Tempo de viagem</option>
+                <option value="distanceMeters">Distância</option>
+                <option value="explorations">Explorações</option>
+                <option value="lateCount">Entregas atrasadas</option>
+              </select>
+            </label>
+            <label class="sort-control">Desempatar por
+              <select id="sort-secondary">
+                <option value="none" selected>Sem desempate</option>
+                <option value="computationTimeMs">Tempo de cálculo</option>
+                <option value="travelTimeSeconds">Tempo de viagem</option>
+                <option value="distanceMeters">Distância</option>
+                <option value="explorations">Explorações</option>
+                <option value="lateCount">Entregas atrasadas</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         <div class="table-wrap">
