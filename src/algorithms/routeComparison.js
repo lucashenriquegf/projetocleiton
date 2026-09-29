@@ -273,7 +273,9 @@ async function calculatePath({
   const path = await bfs({
     ...common,
     markers,
+    velocidade: 0,
   });
+
   throwIfCancelled(signal);
   return path;
 }

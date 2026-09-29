@@ -46,9 +46,25 @@
         <article class="panel configurations-panel">
           <div class="panel-heading">
             <div><span class="eyebrow">Concorrentes</span><h2>Configurações</h2></div>
-            <button id="add-configuration" class="secondary-button" type="button">+ Adicionar</button>
+            <div class="panel-header-actions">
+              <select id="template-select" class="template-select" title="Carregar template pré-definido">
+                <option value="">Templates de teste...</option>
+                <option value="all-40">Todas as 40 combinações possíveis</option>
+                <option value="no-h3-8">Sem H3 (8 variantes)</option>
+                <option value="h3-res9-8">Com H3 Resolução 9 (8 variantes)</option>
+                <option value="h3-all-res-32">Com H3 (Todas 32 resoluções)</option>
+                <option value="astar-all-10">A* Completo (10 variantes)</option>
+                <option value="dijkstra-all-10">Dijkstra Completo (10 variantes)</option>
+                <option value="bfs-all-10">BFS Completo (10 variantes)</option>
+                <option value="dfs-all-10">DFS Completo (10 variantes)</option>
+                <option value="default-2">Padrão inicial (2 variantes)</option>
+              </select>
+              <button id="add-configuration" class="secondary-button" type="button">+ Adicionar</button>
+              <button id="clear-configurations" class="text-button" type="button" title="Limpar todas as configurações">Limpar</button>
+            </div>
           </div>
           <p class="helper">Algoritmo, tipo e corredor H3 são definidos individualmente.</p>
+
           <div id="configuration-list" class="configuration-list"></div>
           <div class="compare-actions">
             <button id="run-comparison" class="primary-button" type="button" disabled>Executar comparação</button>

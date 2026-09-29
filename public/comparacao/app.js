@@ -41,8 +41,11 @@ const elements = {
   stopList: document.querySelector("#stop-list"),
   averageSpeed: document.querySelector("#average-speed"),
   speedValue: document.querySelector("#speed-value"),
+  templateSelect: document.querySelector("#template-select"),
+  clearConfigurations: document.querySelector("#clear-configurations"),
   configurationList: document.querySelector("#configuration-list"),
   addConfiguration: document.querySelector("#add-configuration"),
+
   runComparison: document.querySelector("#run-comparison"),
   cancelComparison: document.querySelector("#cancel-comparison"),
   comparisonStatus: document.querySelector("#comparison-status"),
@@ -119,6 +122,14 @@ function bindEvents() {
     invalidateResults();
   });
   elements.addConfiguration.addEventListener("click", () => addConfiguration());
+  elements.templateSelect.addEventListener("change", (event) => {
+    if (event.target.value) {
+      applyTemplate(event.target.value);
+      event.target.value = "";
+    }
+  });
+
+  elements.clearConfigurations.addEventListener("click", clearConfigurations);
   elements.runComparison.addEventListener("click", runComparison);
   elements.cancelComparison.addEventListener("click", cancelComparison);
   elements.sortResults.addEventListener("change", renderResultsTable);
@@ -281,7 +292,7 @@ function saveDeadline(event) {
 function addConfiguration(template = null) {
   state.configurationCounter += 1;
   const configuration = {
-    id: `configuration-${Date.now()}-${state.configurationCounter}`,
+    id: `configuration-${Date.now()}-${state.configurationCounter}-${Math.random().toString(36).slice(2, 6)}`,
     number: state.configurationCounter,
     color: COLORS[(state.configurationCounter - 1) % COLORS.length],
     algorithm: template?.algorithm || "dijkstra",
@@ -294,8 +305,136 @@ function addConfiguration(template = null) {
   invalidateResults();
 }
 
+function generateAllCombinations() {
+  const configs = [];
+  const algorithms = ["astar", "dijkstra", "bfs", "dfs"];
+  const modelTypes = ["normal", "bidirectional"];
+  const h3Variations = [
+    { useH3: false, h3Resolution: 9 },
+    { useH3: true, h3Resolution: 7 },
+    { useH3: true, h3Resolution: 8 },
+    { useH3: true, h3Resolution: 9 },
+    { useH3: true, h3Resolution: 10 },
+  ];
+
+  for (const algorithm of algorithms) {
+    for (const modelType of modelTypes) {
+      for (const h3Var of h3Variations) {
+        configs.push({
+          algorithm,
+          modelType,
+          useH3: h3Var.useH3,
+          h3Resolution: h3Var.h3Resolution,
+        });
+      }
+    }
+  }
+  return configs;
+}
+
+function generateFilteredCombinations(filter = {}) {
+  return generateAllCombinations().filter((config) => {
+    for (const [key, value] of Object.entries(filter)) {
+      if (config[key] !== value) return false;
+    }
+    return true;
+  });
+}
+
+function applyTemplate(templateKey) {
+  if (state.currentController) return;
+  let newConfigs = [];
+
+  switch (templateKey) {
+    case "all-40":
+      newConfigs = generateAllCombinations();
+      break;
+    case "no-h3-8":
+      newConfigs = generateFilteredCombinations({ useH3: false });
+      break;
+    case "h3-res9-8":
+      newConfigs = generateFilteredCombinations({ useH3: true, h3Resolution: 9 });
+      break;
+    case "h3-all-res-32":
+      newConfigs = generateFilteredCombinations({ useH3: true });
+      break;
+    case "astar-all-10":
+      newConfigs = generateFilteredCombinations({ algorithm: "astar" });
+      break;
+    case "dijkstra-all-10":
+      newConfigs = generateFilteredCombinations({ algorithm: "dijkstra" });
+      break;
+    case "bfs-all-10":
+      newConfigs = generateFilteredCombinations({ algorithm: "bfs" });
+      break;
+    case "dfs-all-10":
+      newConfigs = generateFilteredCombinations({ algorithm: "dfs" });
+      break;
+    case "default-2":
+      newConfigs = [
+        { algorithm: "astar", modelType: "normal", useH3: true, h3Resolution: 9 },
+        { algorithm: "astar", modelType: "bidirectional", useH3: false, h3Resolution: 9 },
+      ];
+      break;
+    default:
+      return;
+  }
+
+  loadConfigurations(newConfigs);
+}
+
+function loadConfigurations(configsList) {
+  if (state.currentController) return;
+  state.configurations = [];
+  state.configurationCounter = 0;
+
+  for (const item of configsList) {
+    state.configurationCounter += 1;
+    state.configurations.push({
+      id: `configuration-${Date.now()}-${state.configurationCounter}-${Math.random().toString(36).slice(2, 6)}`,
+      number: state.configurationCounter,
+      color: COLORS[(state.configurationCounter - 1) % COLORS.length],
+      algorithm: item.algorithm || "dijkstra",
+      modelType: item.modelType || "normal",
+      useH3: item.useH3 ?? true,
+      h3Resolution: Number(item.h3Resolution) || 9,
+    });
+  }
+
+  renderConfigurations();
+  invalidateResults();
+  updateReadyState();
+  const pickups = state.stops.filter((stop) => stop.type === "pickup").length;
+  const deliveries = state.stops.filter((stop) => stop.type === "delivery");
+  if (!pickups || !deliveries.length) {
+    showToast(`${configsList.length} configurações carregadas. Adicione ao menos 1 coleta e 1 entrega no mapa.`);
+  } else {
+    showToast(`${configsList.length} configurações carregadas no template.`);
+  }
+}
+
+function clearConfigurations() {
+  if (state.currentController) return;
+  state.configurations = [];
+  state.configurationCounter = 0;
+  renderConfigurations();
+  invalidateResults();
+  updateReadyState();
+  showToast("Configurações removidas.");
+}
+
 function renderConfigurations() {
   elements.configurationList.innerHTML = "";
+  if (!state.configurations.length) {
+    elements.configurationList.innerHTML = `
+      <div class="empty-configurations">
+        Nenhuma configuração adicionada.<br/>
+        Selecione um <strong>Template</strong> acima ou clique em <strong>+ Adicionar</strong>.
+      </div>`;
+    updateReadyState();
+    return;
+  }
+
   state.configurations.forEach((configuration, index) => {
     const card = document.createElement("div");
     card.className = "configuration-card";
@@ -342,6 +481,7 @@ function renderConfigurations() {
   updateReadyState();
 }
 
+
 function updateConfiguration(id, patch) {
   if (state.currentController) return;
   const configuration = state.configurations.find((candidate) => candidate.id === id);
@@ -387,8 +527,9 @@ async function runComparisonWithWorkers({
 }) {
   throwIfCancelled(signal);
   const totalTasks = configurations.length;
-  const poolSize = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, totalTasks));
+  const poolSize = Math.max(1, Math.min(navigator.hardwareConcurrency || 4, totalTasks, 8));
   const workers = [];
+
 
   for (let i = 0; i < poolSize; i += 1) {
     throwIfCancelled(signal);
@@ -664,7 +805,10 @@ function cancelComparison() {
 }
 
 function setConfigurationControlsDisabled(disabled) {
+  if (elements.templateSelect) elements.templateSelect.disabled = disabled;
+  if (elements.clearConfigurations) elements.clearConfigurations.disabled = disabled;
   elements.configurationList.querySelectorAll("button, select, input").forEach((control) => { control.disabled = disabled; });
+
   if (!disabled) {
     elements.configurationList.querySelectorAll(".configuration-card").forEach((card) => {
       card.querySelector(".h3-resolution").disabled = !card.querySelector(".use-h3").checked;

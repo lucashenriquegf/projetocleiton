@@ -51,9 +51,10 @@ export async function bfs({
         await yieldControl();
         nosNoLote = 0;
       }
-    } else {
+    } else if (velocidade > 0) {
       await new Promise((resolve) => setTimeout(resolve, velocidade));
     }
+
 
     if (atual === destino) {
       break;
