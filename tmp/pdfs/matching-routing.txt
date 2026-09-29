@@ -1,0 +1,1178 @@
+===== PAGE 1 =====
+ 
+Contents lists available at ScienceDirect
+Transportation Research Part C
+journal homepage: www.elsevier.com/locate/trc  
+Integrated sequential matching and routing approach for efficient 
+and eco-friendly freight logistics
+Elham Haji Sami a
+ ,∗, Ahmad Shahnejat Bushehri a
+ , Ashkan Amirnia a, 
+Asad Yarahmadi b, Samira Keivanpour a
+a Department of Mathematical and Industrial Engineering, Polytechnique Montreal, Montreal, H3T  1J6, QC, Canada
+b Department of Civil, Geological and Mining Engineering, Polytechnique Montreal, Montreal, H3T  1J6, QC, Canada
+A R T I C L E  I N F O
+Keywords:
+Smart freight platform
+Matching problem
+Routing problem
+Sequential matching
+Non-Contracted Shippers matching
+ A B S T R A C T
+Integrating smart technologies into freight operations is essential for achieving efficiency, 
+sustainability, and cost-effectiveness in modern logistics. This research presents a novel smart 
+freight platform to optimize matching and routing in freight logistics. The platform incorporates 
+sequential matching and a dynamic bidding mechanism, including Pre-filter matching, Main 
+matching, and Non-Contracted Shippers (NCS) matching models. It utilizes the Vehicle Routing 
+Problem with Time Windows (VRPTW) model to align delivery schedules with shippers’ time 
+windows. The proposed platform reduces resource consumption by minimizing empty truck 
+routes through NCS alignment with en-route trucks. In particular, empty truck routes were 
+reduced by %39, while gas emissions decreased by over nine tons daily. Therefore, the 
+proposed platform not only improves freight efficiency but also contributes to environmental 
+sustainability.
+1. Introduction
+In the modern logistics and transportation industry, achieving efficiency, optimality, and environmental sustainability is 
+more important than ever. These factors are critical, especially in addressing matching, pricing, and routing challenges. Freight 
+transportation faces significant challenges in reducing carbon emissions and optimizing operations. The growing complexity of 
+logistics networks has led to the development of new business models designed to address these issues. These models ensure resource 
+efficiency and seamless integration between organizations while minimizing environmental impact (Padidar et al., 2023). Cargo 
+transportation has become a growing challenge, particularly with the continuous expansion of the world’s urban population. In 
+2018, over half of the global population lived in urban areas, and it is projected that more than two-thirds (68.7%) will reside in 
+metropolitan areas by mid-century (Li et al., 2022). With a large population concentrated in cities, the demand for efficient freight 
+systems will be critical in addressing urban logistical challenges. Shippers often encounter obstacles when working with multiple 
+carriers, including service quality variability, pricing negotiations, and transparency concerns. These challenges highlight the need 
+for a smart freight platform that promotes collaboration and integration. Such a platform would integrate matching, pricing, and 
+routing solutions to optimize the transportation processes (Mukhopadhyay and Setaputra, 2006).
+The matching problem in freight transportation arises from the interaction between the commodity and the freight market (Ro-
+orda et al., 2010; Cavalcante and Roorda, 2013). The evolution of the internet and information technology has enabled the 
+development of platforms for sharing freight resources. This also introduces a new business model for the freight industry, enhancing 
+∗ Corresponding author.
+E-mail address: elham.haji-sami@polymtl.ca (E.H. Sami).
+https://doi.org/10.1016/j.trc.2025.105290
+Received 13 January 2025; Received in revised form 22 June 2025; Accepted 25 July 2025
+Transportation Research Part C 179 (2025) 105290 
+Available online 21 August 2025 
+0968-090X/© 2025 The Authors. Published by Elsevier Ltd. This is an open access article under the CC BY license 
+( http://creativecommons.org/licenses/by/4.0/ ). 
+
+===== PAGE 2 =====
+E.H. Sami et al.
+collaboration between customers and providers on a global scale (Bˇadiˇa et al., 2020). These freight platforms, modeled after online 
+taxi-hailing systems, facilitate the matching of vehicles with goods for distribution. The online-to-offline (O2O) connects online 
+interactions with offline services. It improves resource efficiency by reducing empty vehicle trips. Freight transportation exchanges 
+offer online platforms that connect shippers with available vehicles, making the matching process more efficient (Bˇadiˇa et al., 2020). 
+By minimizing vehicle usage and optimizing shipments, matching systems reduce both operational costs and fuel consumption, 
+promoting sustainable practices in freight transportation. However, despite the advancements in technology, sustainability concerns 
+are often overlooked. The challenge lies in finding ways to further integrate environmental concerns into this process to reduce 
+emissions (Agatz et al., 2012; Crainic et al., 2009; Furuhata et al., 2013).
+Traditionally, distribution matching strategies have been widely used without integrating pricing mechanisms (Li et al., 2020; 
+Mei et al., 2021; Wang et al., 2020b) or considering environmental concerns (Song et al., 2024; Furuhata et al., 2013). Developing 
+an effective pricing strategy in a smart freight platform is challenging due to the complexities of balancing supply and demand. 
+However, achieving such a smart platform maximizes operational efficiency and profitability. As a solution, dynamic pricing models 
+adjust prices based on real-time demand patterns (Pfrommer et al., 2014; Jiao et al., 2020). These models provide flexibility in 
+responding to market competition. They also offer price incentives that encourage sustainable behaviors (Xu et al., 2018; Yan 
+et al., 2021). While pricing strategies can enhance the competitiveness of intermodal transport, integrating sustainability incentives 
+remains a challenge. Effective pricing strategies are essential to optimize operational costs and ensure profitability (Li et al., 2015). 
+The interaction between pricing and matching decisions further highlights the need for integrated approaches (Özkan, 2020). 
+However, many platforms still do not provide feedback mechanisms for stakeholders to adapt pricing based on environmental 
+considerations. Innovative pricing strategies can adapt to market conditions and user preferences in the dynamic transportation 
+landscape (De Ruijter et al., 2023). Moreover, they are crucial for reducing operational costs while improving system efficiency (van 
+Heeswijk, 2022; Özkan, 2020).
+Routing in freight transportation presents another significant challenge. Factors like vehicle capacity, delivery timing, and traffic 
+conditions must be considered to ensure cost-effective and eco-friendly routes (Nam et al., 2013; Birol, 2009). Poor routing not only 
+increases fuel consumption but also contributes significantly to greenhouse gas emissions. In response, municipalities are increasingly 
+prioritizing smarter routing solutions to alleviate urban congestion and reduce the environmental impact of freight transport (Demir 
+et al., 2015; Enthoven et al., 2020). Controlling emissions from heavy-duty vehicles (HDVs), which contribute disproportionately to 
+pollution, is a top priority. Reducing these emissions is crucial for improving air quality and addressing environmental concerns (Lv 
+et al., 2023). Without effective measures, global 𝐶𝑂 2 emissions could increase by 40% by 2030, reaching 40 billion tonnes per 
+year (Nam et al., 2013; Birol, 2009). Advanced routing methods can help optimize vehicle use, reduce emissions, and improve 
+overall sustainability. Understanding the roles of stakeholders in freight transportation and how they interact is crucial for developing 
+public sector models. Additionally, analyzing how these interactions change over time helps in creating models that focus on efficient 
+resource consumption and sustainable solutions (Roorda et al., 2010).
+While advancements in freight transportation models and smart platforms have improved efficiency and resource utilization, 
+significant gaps remain. Many existing solutions address matching, pricing, and routing as separate challenges, often neglecting 
+their integration with environmental sustainability goals. Current matching strategies focus on cost reduction but rarely incorporate 
+mechanisms to align with pricing and sustainability objectives. Pricing strategies, though dynamic, often lack incentives to promote 
+eco-friendly practices. Similarly, routing methods optimize delivery times and costs but frequently overlook their environmental 
+impact, such as reducing greenhouse gas emissions or mitigating urban congestion. These challenges highlight the need for an 
+integrated approach that combines matching, pricing, and routing while embedding sustainability at the core of freight logistics. To 
+address these gaps, this paper introduces several novel contributions aimed at improving efficiency, optimizing resource allocation, 
+and enhancing environmental sustainability:
+• Integrating matching and routing with a dynamic bidding mechanism to enhance the efficiency of the matching process within 
+a smart freight platform.
+• Introducing an integrated sequential matching approach that comprises three stages — Pre-filter matching, Main matching, 
+and NCS matching — to effectively address diverse matching parameters.
+• Leveraging H3 hexagon grids to locate the nearest trucks to shippers, improving spatial accuracy and reducing response times.
+• Introducing a consolidation approach for Non-Contracted Shippers (NCS) to maximize resource utilization and minimize 
+inefficiencies.
+• Ensuring scalability to support both intra-city and inter-city freight logistics, accommodating varying levels of demand and 
+geographical complexity.
+While the platform inherently improves cost efficiency through route optimization and reduced travel distances, this study 
+intentionally emphasizes environmental sustainability as a primary objective. In conventional fuel-based freight systems, emissions, 
+fuel use, and operational costs are tightly linked. By focusing on strategies like en-route truck consolidation and real-time matching 
+of NCS requests, we demonstrate that reducing emissions also results in indirect cost savings. For example, decreasing empty truck 
+routing leads to fewer trips, reduced fuel consumption, and improved vehicle utilization, all of which contribute to lower operational 
+costs. Rather than contradicting cost-efficiency goals, our sustainability-oriented approach complements them. The results show that 
+prioritizing ecological performance, such as reducing 𝐶𝑂 2 by over 9 tons per day, not only supports environmental targets but also 
+strengthens platform profitability and delivery capacity. This dual benefit highlights the value of embedding sustainability into 
+logistical decision-making and supports a new standard for freight platform development.
+Transportation Research Part C 179 (2025) 105290 
+2 
+
+===== PAGE 3 =====
+E.H. Sami et al.
+The remainder of this paper is organized as follows. We present a literature review in Section 2. We then present the problem 
+statement in Section 3. We introduce the methodology and proposed approach for matching and routing in Section 4. Section 5 
+details the validation and performance analysis of our method, including a comparison to pre-implementation results and a 
+real-world case study. Finally, we conclude our work in Section 6.
+2. Related works
+The advent of smart freight platforms has revolutionized the logistics industry, introducing advanced technologies that have 
+transformed traditional freight operations. These platforms are at the forefront of integrating digital innovations into logistics 
+processes. They offer efficient and adaptable solutions to meet the evolving demands of modern supply chains. A key feature of these 
+platforms is a matching system, which leverages advanced algorithms to optimize the pairing of shippers with carriers, ensuring 
+deliveries are both cost-effective and timely. Moreover, the VRPTW integration has further enhanced the platforms’ ability to manage 
+complex logistics networks. VRPTW is an essential tool for logistics optimization, addressing the challenge of determining the most 
+efficient routes for vehicles to meet delivery schedules within specified time windows. This improves service reliability and reduces 
+operational inefficiencies, such as unnecessary travel and idle time.
+This literature review will explore the development and application of these technologies, focusing on their contributions to 
+optimizing freight logistics. By examining the integration of matching algorithms and VRPTW in smart freight platforms, the review 
+aims to provide a comprehensive understanding of how these innovations drive both economic and environmental benefits in the 
+logistics sector.
+2.1. Smart freight platform
+The integration of advanced technologies in freight transportation has transformed operational strategies and market dynamics. 
+A significant development in this area is the adoption of agent-based modeling frameworks, which provide a robust platform for 
+analyzing logistics services and interactions within the freight system (Roorda et al., 2010). These frameworks highlight the roles 
+of diverse actors and the establishment of contracts within the market (Roorda et al., 2010).
+Freight transportation, a crucial part of global supply chains, encompasses a broad range of topics, including modeling, pricing, 
+negative externalities, transportation network design, and sustainable practices (Demir et al., 2015). The literature on transportation 
+has also focused on mitigating the effects of disruptions that cause deviations from the initial transport plans. Most approaches to 
+managing disruptions in road freight transport concentrate on urban freight distributions, where disruptions are often handled by 
+vehicle rerouting (Karam and Reinau, 2022). For instance, Karam and Reinau (2022) presented a hybrid method that integrates 
+simulation modeling, optimization algorithms, and cost–benefit analyses. This method swiftly evaluates the impact of disruptions, 
+identifies affected journeys, and promptly adjusts plans in real-time. Six alternative planning strategies are introduced to manage 
+disruptions, with evaluations based on cost, reliability (measured by time delays), and CO2 emissions.
+Another innovation is the development of a shared Freight Service Intelligence Platform (FSIP) that leverages telematics-enabled 
+Freight Transport Assets (FTA) to meet the needs of various stakeholders in the freight industry (Heinbach et al., 2022). This 
+smart platform helps transportation professionals coordinate shipments by tracking performance and identifying unusual patterns. 
+It also assesses risks, shares data, facilitates communication, and integrates with other systems. From this study, five key principles 
+were developed to address the main needs identified. The tool was tested by six transport experts and logistics software providers, 
+showcasing its potential in enhancing coordination across the freight industry.
+Further, (Dai et al., 2023) explored how prices are balanced on online retail platforms, examining whether premium or budget 
+items are better suited for direct sales or resale. The study found that product quality, influenced by competition between channels, 
+commission rates, and product costs, plays a significant role in decision-making. In some cases, product quality can change how 
+suppliers make decisions, potentially leading to mutually beneficial outcomes for the supplier, the platform, and the customers. 
+Following the discussion of the smart freight platform, the next section explores how the matching problem addresses critical 
+challenges in logistics.
+2.2. Matching problem
+The two-sided matching problem, first introduced by Gale and Shapley (1962), is an assignment problem that involves two 
+distinct sets of entities, each with its own preferences for members of the opposite group (Gale and Shapley, 1962). This research 
+is the basis for various matching markets, where stable matching principles ensure equitable and optimal outcomes (Ausseil, 
+2022). In the context of transportation platforms, dynamic methods for matching requests to suppliers explore the complexity of 
+matching algorithms. These methods optimize transportation networks using algorithms such as preference-aware task assignment, 
+ride-sourcing modeling, and dynamic pricing strategies (Ausseil, 2022).
+The importance of fairness in repeated matchings within two-sided markets is highlighted in a case study on a ride-hailing 
+platform. The study emphasizes the need for equitable treatment of both drivers and riders to optimize platform operations and 
+improve overall satisfaction. Özkan (2020) investigated the interplay between pricing and matching decisions on ride-sharing 
+platforms, emphasizing the need to jointly optimize both factors to achieve optimal performance. Similarly, a mathematical 
+framework is presented by Yan et al. (2021) to integrate matching and pricing decisions, aiming to achieve optimal ride matching 
+while ensuring system stability and financial sustainability.
+Transportation Research Part C 179 (2025) 105290 
+3 
+
+===== PAGE 4 =====
+E.H. Sami et al.
+The matching process in ride-hailing systems has also been studied by Li and Liu (2021), particularly examining the feasibility 
+of one-to-two matching strategies. This research introduced an incentive scheme and pricing model that considers riders’ bounded 
+rational behavior, offering insights into enhancing platform efficiency. In the context of autonomous vehicle systems, (Allahviranloo 
+and Bouyeure, 2022) designed and tested an online platform for shared autonomous vehicles (SAVs). This platform allows 
+households to co-own vehicles, reserve time slots, and trade reservations with other co-owners. This model incorporates preferences, 
+demographics, and activity patterns to match households to vehicles effectively.
+In the cargo market, price matching has also been a focus. Xu et al. (2021) analyzed the impact of price-matching policies on 
+forwarding fees. This study explores how liner company encroachment affects pricing strategies and forces forwarders to adopt price 
+matching to stay competitive. Similarly, (Zhang et al., 2024) focused on optimizing the stowage process of highway freight vehicles 
+through dynamic cargo stowage. To reach this goal, they introduced a model that predicts vehicle arrival times and adjusts stowage 
+plans dynamically using genetic and simulated annealing algorithms. A recent study in this field proposed a novel pre-selection 
+ratio to optimize the allocation of vehicles between pooling and non-pooling orders. The study identified conditions under which 
+en-route ride-pooling services could benefit all stakeholders (Wang et al., 2025). Having addressed the matching problem, the next 
+section focuses on the pricing strategies employed in transportation services.
+2.3. Pricing
+The study of pricing strategies in transport systems has attracted significant attention, particularly in the context of inter-modal 
+freight transport and ride-sharing platforms. Li et al. (2015) explored the complexities of pricing in inter-modal freight transport, 
+proposing a cost-plus pricing strategy that incorporates operational costs and targeted profit margins. Their study also addressed 
+challenges faced by operators, such as traffic congestion and limited infrastructure capacity, suggesting that well-designed pricing 
+strategies can enhance competitiveness and influence mode choice. The significance of accurate cost calculation and market insights 
+was underscored as a critical factor in developing effective pricing approaches for inter-modal transport services.
+In the context of ride-sharing, (Özkan, 2020; Yan et al., 2021) examined the interplay between pricing and matching to 
+optimize system performance. The former emphasized the need for joint optimization of pricing and matching decisions to achieve 
+maximum matching rates, noting that simple pricing strategies can be effective under certain conditions. Conversely, (Yan et al., 
+2021) highlighted the role of dynamic pricing models in accommodating diverse consumer behaviors and improving ride-sharing 
+efficiency. Additionally, studies on dynamic methods, including passenger-based and distance-based pricing approaches, support 
+the recommendation of applying synchronized optimization models for pricing strategies in taxi-sharing services (Qiu et al., 2022). 
+Further, considering the strategic interactions between traditional taxi services (TTS) and online car-hailing (OCS) during the 
+COVID-19 pandemic, (Gu et al., 2024) applied Game Theory to analyze the dynamics between these two systems.
+Walunj et al. (2022) investigated market segmentation in ride-hailing, illustrating how different pricing strategies influence 
+competition and consumer choices. They showed that price differentiation based on origin and destination can significantly impact 
+the total number of matches and overall system efficiency. Additionally, (De Ruijter et al., 2023) explored the impact of alternative 
+demand behaviors and pricing settings on ride-pooling adoption and service levels. They presented a graph-based assignment method 
+for optimizing the matching of requests to vehicles while considering vehicle capacity and travel cost constraints. Another study 
+evaluated collaboration and profit-sharing methods for carriers, aiming to improve operational efficiency in pricing and ensure 
+fair profit distribution in pickup-and-delivery problems using Game Theory (Padmanabhan et al., 2023). Pricing strategies for 
+internalizing these externalities have also been explored to align economic activities with environmental sustainability (Demir et al., 
+2015; Nam et al., 2013).
+In the context of Electric Vehicle Sharing (EVS), (Jiao et al., 2020) introduced a price-incentive method aimed at addressing the 
+imbalance in EVS systems. This approach adjusts rental prices on mobile terminals to control users’ trip decisions. Operators reduce 
+return prices at low-demand stations with idle vehicles to attract customers and improve vehicle utilization and rental revenue. 
+Conversely, at stations with high demand for vehicles and parking spots, operators raise return prices to reduce customer adoption 
+and maintain a manageable demand level while increasing profits. This dynamic pricing strategy optimizes both service adoption 
+and operational profitability by adjusting trip prices based on vehicle availability and demand imbalances. Following the discussion 
+on pricing strategies, the next section explores how the VRPTW framework addresses operational challenges in delivery services.
+2.4. Vehicle routing problem
+The vehicle routing problem (VRP) is a critical area of research in logistics and transportation management, focusing on 
+optimizing vehicle routes and schedules to service customers within specific time frames. A VRP solver has been applied in 
+freight transport to enhance the efficiency of urban consolidation centers (UCC) by minimizing costs, travel distances, and carbon 
+emissions, particularly in the context of student accommodations (Bukoye and Gadiraju, 2022). The VRPTW extends the classical 
+VRP by incorporating time constraints for deliveries and pickups, making it more applicable to real-world scenarios where timing is 
+crucial (Solomon, 1987). Early research by Solomon (1987) introduced the VRPTW, highlighting its relevance in various practical 
+applications such as postal deliveries, school bus routing, and industrial refuse collection. This study emphasized the challenges 
+of integrating time windows into routing and scheduling, which require balancing travel costs, vehicle utilization, and customer 
+satisfaction (Solomon, 1987).
+Negative externalities, such as emissions, noise pollution, and congestion, have been a major focus of freight transportation 
+research. Studies have proposed various models to quantify these externalities and assess their impact across different transport 
+modes, including road, rail, maritime, and air (Demir et al., 2015).
+Transportation Research Part C 179 (2025) 105290 
+4 
+
+===== PAGE 5 =====
+E.H. Sami et al.
+Table 1
+Problem characteristics considered in freight transportation.
+ Study Fleet Pricing approach Matching consideredRouting considered  
+ Allahviranloo and Bouyeure (2022)Autonomous VehiclesTime Slot Pricing Yes –  
+ Xu et al. (2021) Maritime vessels Price Matching Yes –  
+ Yang et al. (2023) – Game Theory Yes –  
+ Sühr et al. (2019) – Surge Pricing Yes –  
+ Özkan (2020) – Origin-based & constant pricing Yes –  
+ Yan et al. (2021) – Defined pricing Yes –  
+ Li and Liu (2021) – OD-based trip fare Yes Optimal delivery route  
+ Gale and Shapley (1962) – – Yes –  
+ Roorda et al. (2010) HDV Cost Analysis Yes –  
+ Wang et al. (2016) Maritime vessels Cost-based pricing Yes –  
+ Demir et al. (2015) Rail, Maritime, Air Review Review Review  
+ Solomon (1987) Road vehicles – Yes VRPTW  
+ Nam et al. (2013) Maritime vessels Cost optimization & network design Yes –  
+ Li et al. (2022) Freight vehicles Contract-based pricing Yes Routing for schedules  
+ Karam and Reinau (2022) Freight vehicles Real-time adjustments – Routing in case of disruption  
+ Heinbach et al. (2022) Freight assets IoT-based real-time pricing – –  
+ Dai et al. (2023) Retail products Equilibrium pricing Yes –  
+ Zhang et al. (2024) Freight vehicles Cost minimization via metaheuristics– –  
+ Wang et al. (2020b,a) Freight vehicles Dynamic pricing Yes Routing for schedules  
+ Li et al. (2015) Inter-modal freight – – Routing based on inter-modal networks 
+ Walunj et al. (2022) – Dynamic pricing Yes –  
+ Jiao et al. (2020) EV Price incentives – –  
+ Mei et al. (2021) HDV Cost-based Yes –  
+ Wang et al. (2025) Autonomous VehiclesGame Theory Yes –  
+ Padmanabhan et al. (2023) Autonomous VehiclesCost-based – –  
+The design of efficient freight transportation networks has also been a significant area of research. The use of optimization 
+techniques has greatly improved resource allocation and vehicle routing, making freight operations more cost-effective and reliable. 
+One key advancement is the adoption of multimodal transportation systems, which combine various transport modes to take 
+advantage of their unique strengths, such as cost efficiency, speed, and flexibility. This approach not only enhances operational 
+efficiency but also provides more adaptable and dependable logistics solutions (Wang et al., 2016). Recent advancements in VRPTW 
+research have focused on integrating emerging technologies such as artificial intelligence and machine learning to improve route 
+optimization and decision-making processes. These technologies have enabled more dynamic and adaptive routing strategies to 
+better respond to changing traffic conditions and customer demands, further enhancing the efficiency and flexibility of transportation 
+systems (Wang et al., 2023).
+From the literature review, it is evident that various aspects of logistics — such as freight platforms, the matching problem, 
+pricing strategies, and VRP frameworks — have been well-studied. However, there is a noticeable gap in integrating these elements 
+into a unified framework. Most research focuses on individual components, lacking a comprehensive approach to addressing the 
+interconnected challenges in freight logistics, such as stakeholder coordination, real-time adaptability, and sustainability. This 
+underscores the need for future studies to explore interconnected solutions that tackle these challenges while balancing economic 
+efficiency and environmental sustainability. To conclude this section, we present the problem characteristics in Table  1, which 
+provides a brief overview of the reviewed papers.
+3. Problem statement
+On the cutting edge of transforming logistics and freight management, matching and routing problems are central to the evolution 
+of how goods are transported. To enhance both the performance and environmental impact of cargo transportation, it is essential to 
+tackle matching and route problems effectively. In the traditional approach, a shipper, who owns cargo and seeks delivery, must find 
+a carrier with a suitable truck. After identifying a potential match, the process typically involves time-consuming price negotiations, 
+which may not always lead to an agreement. If no agreement is reached, the shipper must restart the search.
+To address these challenges effectively, a robust optimization method is required that can adapt to large-scale market fluctuations. 
+This method should be agile enough to re-optimize solutions as circumstances evolve. Such flexibility is key to maintaining the 
+balance between competitive pricing and profit maximization, which are critical for long-term business viability in a competitive 
+market.
+Taxi-hailing platforms such as Uber match customers and drivers to provide seamless rides. By leveraging this approach, we 
+optimize the matching process, ensuring that shippers receive reliable and timely delivery services while carriers maximize service 
+quality, capacity utilization, and profitability. However, the smart freight platform faces several challenges that must be addressed to 
+enhance overall performance and sustainability. For the rest of this document, we will refer to the smart freight platform simply as 
+the platform. The primary challenge is to enhance the matching efficiency between shippers and carriers. The diversity in cargo types, 
+weights, and truck availability requires a novel matching algorithm to ensure optimal pairings. A significant issue is the presence of 
+empty trucks en route, leading to wasted resources and increased operational costs. Reducing these instances is crucial for improving 
+Transportation Research Part C 179 (2025) 105290 
+5 
+
+===== PAGE 6 =====
+E.H. Sami et al.
+resource utilization. Balancing the economic factors, such as increasing profit margins, while ensuring stakeholder satisfaction is 
+another critical objective. The platform’s pricing algorithm and efficient resource management play key roles in achieving this 
+balance.
+4. Methodology
+The nature of the matching problem is highly complex, making it challenging to analyze and process all relevant features 
+simultaneously. To address this, we use sequential mathematical models that break down the problem into smaller, more manageable 
+steps. These models are based on the concept of sequential processes, allowing for the consideration of multiple features in a 
+logical order. This method enables a comprehensive understanding of the problem, leading to more accurate and efficient matching 
+outcomes. We also address the VRPTW to prioritize transportation routes on our platform. This approach not only increases control 
+over the entire delivery process but also helps us generate sustainable solutions.
+To represent spatial information in the urban freight environment, we adopt the H3 hexagonal grid system rather than 
+a traditional radius-based (circular) approach. Unlike circular methods, H3 partitions the service region into contiguous, non-
+overlapping hexagonal cells of uniform size. This eliminates problems of overlap and gaps common in radius-based or square-grid 
+systems, which often complicate distance calculations and lead to inconsistent spatial indexing. The uniformity and adjacency 
+features of H3 greatly improve the platform’s ability to identify nearby trucks without requiring direct distance computations for 
+each request. Furthermore, H3 supports hierarchical resolution levels, allowing the system to dynamically scale search areas, starting 
+from fine-grained local searches and expanding outward if necessary, without recalculating coordinates or introducing additional 
+computational cost. This is particularly advantageous in dense urban settings such as Montreal, where delivery decisions must be 
+both fast and spatially precise. In practical terms, the city is preprocessed once into a hexagonal grid, and each shipper or carrier 
+is mapped to a corresponding cell. This structure avoids repetitive calculations for each new request and accelerates the matching 
+process significantly. Therefore, in a dynamic logistics environment where thousands of matches must be evaluated quickly, H3 
+offers both computational speed and spatial resolution that radius-based methods lack. This makes it well-suited for real-time freight 
+platforms.
+To ensure fair pricing, we implement a bidding process that allows carriers to bid for shipments, promoting competitive pricing 
+that benefits both shippers and carriers while maintaining fairness in the transaction. Our platform is designed to accommodate two 
+distinct types of shippers — Contracted Shippers (CS) and Non-Contracted Shippers (NCS) — to address different needs within the 
+freight logistics ecosystem. This flexibility allows the platform to cater to a broader range of users. Moreover, the platform offers end-
+to-end delivery management, overseeing the entire operation from routing to consolidation. This comprehensive approach ensures 
+a seamless and integrated freight delivery experience, providing greater control over the logistics process. Finally, the method is 
+scalable, making it applicable to both intra-city and inter-city freight logistics. This scalability ensures that the platform can handle 
+a wide range of freight operations, regardless of the geographical scope.
+The proposed method consists of four sequential steps based on real-world scenarios that occur on the platform, which includes 
+the mathematical model and processes. The process begins with the generation of shipping requests on the platform, including the 
+required shipping data. This data is then promptly matched with available drivers based on their locations and schedules, creating 
+a responsive and efficient freight management system. There are three main stakeholders involved — shippers, carriers, and the
+platform itself — each defined by their own unique characteristics (See Table  2).
+In the proposed model, shippers are divided into two distinct groups: CS and NCS. This classification improves the model’s 
+transparency and allows the platform to address the specific needs of each group. CS are those who have concluded a formal contract 
+with the platform. These shippers expect their cargo to be delivered by a carrier while considering factors such as preferred quality 
+and competitive pricing. Typically, CS deals with a single pick-up point for cargo but may have multiple delivery points. We allow 
+a truck to serve one CS along with multiple NCS, leveraging en-route consolidation to increase efficiency and reduce empty travel. 
+Similarly, each truck is generally assigned to serve one primary CS shipment, potentially supplemented by smaller NCS requests en 
+route. NCS, on the other hand, does not hold an active contract with the platform, but can still receive its services. NCS, however, 
+may not have access to the same delivery preferences as CS. NCS requests usually include one pick-up point and a single delivery 
+point, which will be serviced by an en-route truck. It is important to mention that the platform previously assigned idle trucks for 
+such deliveries.
+The delivery price for CS will be determined through a bidding process, whereas the delivery charges for NCS may not be as 
+competitive as those for CS. Moreover, offering fair pricing for CS can motivate NCS to formalize contracts with the platform, thereby 
+fostering stronger partnerships and improving service consistency. In terms of carriers, they own various types of trucks to serve 
+delivery services for shippers. Once a carrier is recognized as eligible by the platform, it is allowed to participate in the bidding 
+process to compete with other carriers for delivery assignments. The eligibility process for carriers will be discussed in Section 4.2.
+The platform itself serves as the central entity that matches carriers with shippers. It also manages the entire delivery operation, 
+from generating shipping requests and facilitating the bidding process to fulfillment of the delivery. The platform ensures that all 
+deliveries meet the required criteria, thereby optimizing the logistics process. To address the challenges presented by the matching 
+problem, four models have been developed. These models include Pre-filter matching, Main matching, NCS matching, and VRPTW. 
+Each of these models plays a crucial role in navigating the platform’s operations and ensuring that generated requests are effectively 
+addressed.
+Transportation Research Part C 179 (2025) 105290 
+6 
+
+===== PAGE 7 =====
+E.H. Sami et al.
+Table 2
+Stakeholders characteristics.
+ Shipper Carrier platform  
+ Contracted (CS) Non-contracted (NCS)  
+ Has one origin and Has one origin and Each truck receives a quality Manages delivery operations  
+ several delivery points one delivery point score for delivery operations  
+  
+ Concludes a contract Does not conclude a contract Has several trucks with Matches shippers and carriers  
+ with the platform with the platform different types based on compatibility criteria 
+  
+4.1. Mathematical formulation
+We formulate the matching problem as a sequential matching model, which enhances the efficiency of the VRPTW model in 
+the transportation stage. This approach reduces the complexity of the problem and refines matching parameters that need to be 
+considered. In addition to the VRPTW model, this study develops three models — Pre-filter matching, Main matching, and NCS 
+matching — to manage the entire delivery operation. The models rely on several key assumptions. For distance estimation, we use 
+Google Maps H3 hexagons to calculate the distance between two points, as will be discussed in greater detail later. Carriers have 
+the flexibility to offer varying prices based on factors such as truck type and quality score. Each truck is capable of serving multiple 
+requests, enabling efficient utilization of resources. Delivery operations are designed to adapt dynamically to evolving scenarios, 
+such as new requests from NCS, allowing point prioritization to shift as needed. The operation starts from a single origin point, 
+typically the shipper’s location, and concludes at the carrier’s garage. It is structured around the shipper’s preferred time windows 
+to ensure timely service. However, as delivery time is less critical for NCS, time windows are automatically disregarded. The arcs 
+between two delivery points are unidirectional, and each delivery point must be visited once to ensure optimal routing. At the end 
+of the delivery process, shippers provide a service score to evaluate their satisfaction with the service received. This score will be 
+taken into account as a quality score for the carrier or truck and will influence the matching process for future delivery requests. The 
+bidding process for delivery services begins at a maximum operation price, denoted as 𝑝𝑚𝑎𝑥
+𝑠 . Carriers can propose prices based on 
+their desired profit margins relative to 𝑝𝑚𝑎𝑥
+𝑠 . However, they are informed that bids exceeding 𝑝𝑚𝑎𝑥
+𝑠  significantly reduce their chances 
+of being matched with a shipper. To optimize this process, the platform employs a flexible pricing algorithm that can incorporate 
+various parameters. We employ two distinct pricing algorithms to determine the platform price, each tailored to specific operational 
+scenarios.
+The first approach, known as Origin and Destination-based Pricing (ODP), is utilized during the bidding process to calculate the 
+maximum price 𝑝𝑚𝑎𝑥
+𝑠 . This pricing strategy is based on the distance between the origin and destination hexagons. The calculation 
+takes into account the number of hexagons that the truck must pass through to complete the delivery operation. The ODP method 
+focuses on key parameters such as the shipper’s origin, the delivery destinations the truck must reach, and associated costs, including 
+fuel, labor, vehicle maintenance, and insurance (Holguín-Veras and Patil, 2008; Li et al., 2015). For requests that bypass the bidding 
+process, we employ the Origin-based Pricing (OP) strategy, which determines the price primarily based on the shipper’s origin. Any 
+detour from the pre-defined Delivery Operation Plan (DOP) can disrupt operations. In this scenario, the risk of deviating from 
+designated time windows increases, especially for trucks already in service. Shipper’s origin is vital when determining the price. 
+Then, for the requests without a bidding process, the OP method is used. The OP method also accounts for additional expenditure, 
+including a three percent surcharge for the deviation rate and a four percent increase for requests without a contract (Özkan, 2020; 
+Li et al., 2015). This careful consideration of the shipper’s origin ensures the fulfillment of requests through en-route trucking, 
+particularly for NCS, whose origin is a pivotal factor in determining pricing. In the next section, the mathematical models are 
+presented. Table  3 provides the mathematical notation for the associated models.
+4.2. Pre-filter matching
+The Pre-filtering matching process aims to identify carriers with the potential to initiate the bidding process by evaluating several 
+key parameters. The first parameter is region, where we utilize the H3 approach1 to identify the nearest truck belonging to a 
+specific carrier within the shipper’s region. The H3 approach combines spatial indexing techniques with hierarchical data structures, 
+providing an efficient and precise method to locate the most suitable truck. The shipper’s location is identified using a hexagonal grid 
+and selects trucks located in one of the six neighboring hexagons (Fig.  1). The selected truck must belong to the specified carrier and 
+meet the requirements outlined by the shipper. The second parameter is truck availability, which considers the operational status 
+of the potential trucks and evaluates the estimated time required to complete the delivery operation. Only trucks available for the 
+required timeframe are considered. The third parameter is truck capacity, where each truck’s predetermined capacity is assessed. 
+Trucks that have the appropriate capacity to carry the specified cargo are included in the selection.
+1 H3, which stands for Hexagonal Hierarchical Geospatial Indexing System, is a geospatial indexing framework designed to partition the Earth’s surface into 
+hexagonal cells at varying resolutions. This approach offers a hierarchical representation of geographic data. For our purposes, we utilize resolution layer 7 to 
+precisely identify the location of each object, leveraging unique hexagonal identifiers to facilitate spatial analysis and proximity searches.
+Transportation Research Part C 179 (2025) 105290 
+7 
+
+===== PAGE 8 =====
+E.H. Sami et al.
+Table 3
+Models notation.
+ Sets Description  
+ 𝑁 = {0, … , 𝑁} Set of points that the truck should visit, where 𝑖, 𝑗 ∈ 𝑆. If 𝑖, 𝑗 = 0: Ship origin (delivery operation start),  
+ if 𝑖, 𝑗 = 𝑁: Carrier’s garage/parking  
+ 𝑉𝑆 = {𝑠1, … , 𝑠𝑆 } Set of Contracted Shippers (CS)  
+ 𝑉𝑆′ = {𝑠′
+1, … , 𝑠′
+𝑆′ } Set of Non-Contracted Shippers (NCS)  
+ 𝑉𝐶 = {𝑐1, … , 𝑐𝐶 } Set of carriers  
+ 𝑉𝐶 ′ = {𝑐′
+1, … , 𝑐′
+𝐶 ′ } Subset of carriers eligible to participate in the bidding  
+ 𝑉𝐶 ′′ = {𝑐′′
+1 , … , 𝑐′′
+𝐶 ′′ } Subset of carriers whose trucks are undertaking the delivery  
+ 𝑉𝐾 = {𝑘1, … , 𝑘𝐾 } Set of trucks  
+ 𝜎𝑖
+𝑠 Set of hexagons around the shipper’s location hexagon  
+ 𝛿+(𝑖) Set of outgoing arcs from delivery point 𝑖  
+ 𝛿−(𝑖) Set of incoming arcs to delivery points 𝑖  
+ Parameters Description  
+ 𝑎𝑘
+𝑐 The availability time of truck 𝑘, which belongs to carrier 𝑐  
+ 𝑏𝑚𝑎𝑥
+𝑐𝑘 Maximum weight threshold for truck 𝑘 (belongs to carrier 𝑐)  
+ 𝑏𝑚𝑖𝑛
+𝑐𝑘 Minimum weight threshold for truck 𝑘 (belongs to carrier 𝑐)  
+ 𝑄𝑘
+𝑐 Service score of truck 𝑘, belonging to carrier 𝑐, based on the stars to be given in advance (range from 1 to 5) 
+ 𝑄𝑠 Minimum acceptable service score for shipper  
+ 𝑝𝑘
+𝑠𝑐 The bid price offered by carrier 𝑐 ∈ 𝑉𝑐′ for truck 𝑘 to accept the delivery operation request from shipper 𝑠  
+ 𝑔𝑠 Total weight of cargo belonging to shipper 𝑠  
+ 𝑒𝑖
+𝑠 The weight of cargo unloaded at delivery point 𝑖  
+ 𝑓 𝑖
+𝑠 The weight of the cargo that is loaded at pickup point 𝑖  
+ 𝑝𝑚𝑎𝑥
+𝑠 The maximum fare from platform to complete the delivery operation for shipper 𝑠  
+ 𝜏𝑖 Service time (loading/unloading) at delivery point 𝑖  
+ 𝑡𝑖𝑗 Travel time between points 𝑖 and 𝑗  
+ [𝑎0, 𝑏0] Earliest and latest pickup time from the shipper origin  
+ [𝑎𝑖, 𝑏𝑖] Specific delivery time window for delivery point 𝑖, with the earliest and latest delivery times  
+ 𝜃𝑠 Maximum 𝑏𝑖 for shipper 𝑠, ∀𝑖  
+ 𝑈𝑖𝑗 Big-𝑀 method number  
+ 𝑙𝑘
+𝑠𝑐 Indicator variable. If truck 𝑘, belonging to carrier 𝑐, is located in a hexagon part of 𝜎𝑖
+𝑠, then 𝑙𝑘
+𝑠𝑐 = 1  
+ 𝑧𝑘
+𝑠𝑐 If truck 𝑘, belonging to carrier 𝑐, is compatible with cargo type 𝑑, then 𝑧𝑘
+𝑠𝑐 = 1, otherwise = 𝑧𝑘
+𝑠𝑐 = 0  
+ 𝑐𝑘
+𝑖𝑗 Travel cost for vehicle type 𝑘, per kilometer between points 𝑖 to 𝑗.  
+ 𝐺𝑘
+𝑐 Available capacity of en-route truck 𝑘, belonging to carrier 𝑐, at a specific time  
+ Variables Description  
+ 𝑀 𝑘
+𝑠𝑐 If shipper 𝑠 is matched with carrier 𝑐 on truck 𝑘, then 𝑀 𝑘
+𝑠𝑐 = 1, otherwise = 𝑀 𝑘
+𝑠𝑐 = 0  
+ 𝑥𝑖𝑗 If arc (𝑖, 𝑗) is used by truck, then 𝑥𝑖𝑗 = 1, otherwise = 𝑥𝑖𝑗 = 0  
+ 𝑤𝑖 The time variable specifying when service at point 𝑖 begins when being served by a truck  
+ ℎ𝑖 Loading variable that represents the load of a truck after the service at node 𝑖  
+Fig. 1. H3 approach in matching models.
+Transportation Research Part C 179 (2025) 105290 
+8 
+
+===== PAGE 9 =====
+E.H. Sami et al.
+The optimization model seeks to maximize the overall matching rate between shippers and carriers, as represented by the 
+following objective function, where 𝑀 𝑘
+𝑠𝑐 is a binary variable indicating whether truck 𝑘 from carrier 𝑐 is assigned to shipper 𝑠:
+𝑂𝑏𝑗1 = Max
+( 𝑆∑
+𝑠=1
+𝐶∑
+𝑐=1
+𝐾∑
+𝑘=1
+𝑀 𝑘
+𝑠𝑐
+)
+(1)
+S.t.: 𝑀 𝑘
+𝑠𝑐 (𝑎𝑘
+𝑐 − 𝜃𝑠) ≥ 0, ∀𝑠 ∈ 𝑉𝑆 , ∀𝑐 ∈ 𝑉𝐶 , ∀𝑘 ∈ 𝑉𝐾 (2)
+𝑏min
+𝑐𝑘 ≤ 𝑀 𝑘
+𝑠𝑐 ⋅ 𝑔𝑠 ≤ 𝑏max
+𝑐𝑘 , ∀𝑠 ∈ 𝑉𝑆 , ∀𝑐 ∈ 𝑉𝐶 , ∀𝑘 ∈ 𝑉𝐾 (3)
+𝑀 𝑘
+𝑠𝑐 ≤ 𝑙𝑘
+𝑠𝑐 , ∀𝑠 ∈ 𝑉𝑆 , ∀𝑐 ∈ 𝑉𝐶 , ∀𝑘 ∈ 𝑉𝐾 (4)
+𝑀 𝑘
+𝑠𝑐 ∈ {0, 1}, ∀𝑠 ∈ 𝑉𝑆 , ∀𝑐 ∈ 𝑉𝐶 , ∀𝑘 ∈ 𝑉𝐾 (5)
+The constraints of the model ensure that matches meet specific requirements. A time constraint in line (2) ensures that the available 
+time for truck 𝑘 (belonging to carrier 𝑐) is greater than or equal to the maximum required shipping operation time for shipper 
+𝑠. A capacity constraint in line (3) enforces that the weight of the cargo from shipper 𝑠 falls within the truck 𝑘’s capacity range 
+(belonging to carrier 𝑐). A location constraint in line (4) requires that the truck is located in one of the hexagons neighboring 
+the shipper’s location. Finally, the decision variable 𝑀 𝑘
+𝑠𝑐 is subject to a binary constraint in line (5), ensuring whether truck 𝑘 from 
+carrier 𝑐 is assigned to shipper 𝑠. It can only take values of 1 (indicating a match) or 0 (indicating no match). The minimum required 
+shipping operation threshold in the constraint in line (3) is derived from the operational logic of our case study platform, which 
+primarily services medium- to heavy-load freight. In practice, assigning a high-capacity truck to transport a very light shipment leads 
+to inefficient fuel usage, underutilization of vehicle capacity, and reduced profitability. Thus, the minimum weight requirement 
+is introduced to avoid economically unsustainable matches between shippers and carriers. However, we acknowledge that this 
+constraint is tailored to the specific operational context of our study. In broader applications, such as last-mile delivery, courier 
+services, or platforms dealing with smaller and more frequent shipments, this threshold can be relaxed or redefined. We have 
+designed the model to remain flexible and adaptable, enabling stakeholders to adjust this constraint according to their own business 
+logic and operational requirements.
+To address potential challenges in the matching process, the platform incorporates a feedback mechanism for carriers. If a match 
+between a shipper and a carrier is not achieved, the platform analyzes the shipper’s request data and provides actionable feedback to 
+the carriers. This feedback helps carriers adjust their offerings to better align with shipper requirements, reduces the risk of future 
+profit losses, and optimizes match potential. In cases where matching is still challenging, specific parameters may be adjusted or 
+relaxed. Alternatively, the H3 policy can be modified to include more trucks within the shipper’s vicinity. This ensures that trucks 
+located in the neighboring hexagons and capable of meeting availability and capacity requirements are prioritized in the selection 
+process. Through the Pre-filter matching model, potential carriers are effectively filtered to initiate the bidding process. The final 
+output of the model identifies trucks located within the designated neighboring hexagons that can carry the cargo while satisfying 
+both availability and capacity criteria.
+4.3. Main matching
+The platform identifies potential carriers for the Main matching and initiates the bidding process. It calculates the maximum 
+delivery operation price based on several factors, including ODP, marginal profit, and other probabilistic considerations, to determine 
+the initial bidding price. Simultaneously, a request notification is sent to the pre-filtered carriers, inviting them to participate in the 
+bidding process. Each carrier proposes a price based on its parameters, such as marginal profit, truck type, and cargo type. However, 
+all carriers must adhere to the maximum bidding price set by the platform. If a carrier’s suggested price exceeds the maximum 
+allowed, they may be excluded from consideration.
+The objective function of the Main matching model aims to maximize the profit for the shipper by finding the best match based 
+on the minimum bidding price. This is expressed as:
+𝑂𝑏𝑗2 = Max
+⎛
+⎜
+⎜⎝
+𝑆∑
+𝑠=1
+𝐶′
+∑
+𝑐=1
+𝐾∑
+𝑘=1
+𝑀 𝑘
+𝑠𝑐 (𝑝max
+𝑠 − 𝑝𝑘
+𝑠𝑐 )
+⎞
+⎟
+⎟⎠
+(6)
+S.t.: 𝑀 𝑘
+𝑠𝑐 ≤ 𝑧𝑘
+𝑠𝑐, ∀𝑐 ∈ 𝑉𝐶′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆 (7)
+𝑀 𝑘
+𝑠𝑐 (𝑄𝑘
+𝑐 − 𝑄𝑠) ≥ 0, ∀𝑐 ∈ 𝑉𝐶′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆 (8)
+𝑀 𝑘
+𝑠𝑐 𝑝𝑘
+𝑠𝑐 ≤ 𝑝max
+𝑠 , ∀𝑐 ∈ 𝑉𝐶′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆 (9)
+𝑀 𝑘
+𝑠𝑐 ∈ {0, 1}, ∀𝑐 ∈ 𝑉𝐶′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆 (10)
+Line Eq.  (7) is the compatibility constraint, which ensures that the truck type is appropriate for the cargo type requested by the 
+shipper. For example, liquid-based cargo requires tanker trucks, and oversized goods necessitate flatbeds. This constraint is critical 
+not just for operational feasibility but also for minimizing environmental inefficiencies. Assigning an incompatible truck to a specific 
+cargo type can lead to improper loading, underutilization of capacity, or the need for additional trips, each of which contributes 
+to increased fuel consumption and emissions. Thus, the constraint in line (7) indirectly supports emission reduction by preventing 
+misaligned resource usage that would otherwise result in excessive gas emissions. The service quality constraint in the line (8) takes 
+Transportation Research Part C 179 (2025) 105290 
+9 
+
+===== PAGE 10 =====
+E.H. Sami et al.
+the shipper’s minimum acceptable quality score into account. The shipper specifies this requirement when submitting a request. The
+platform uses a quantitative service score index, based on feedback provided by other shippers, to ensure that the selected carrier 
+meets the required quality threshold. The bidding price constraint on the line (9) ensures that the price offered by the carrier does not 
+exceed the platform’s maximum starting fare for the shipper. Finally, the binary constraint on the line (10) ensures that the decision 
+variable 𝑀 𝑘
+𝑠𝑐 can only take a value of 1 (indicating a match) or 0 (indicating no match). Together, these constraints allow the Main 
+Matching model to identify the most suitable carrier-truck combination, ensuring compatibility, profitability, service quality, and 
+operational feasibility. Additionally, the model supports environmental sustainability by preventing mismatches that may lead to 
+inefficient resource use or increased emissions.
+In some instances, the Main matching model may not yield a unique result. This occurs when multiple carriers and trucks meet 
+all defined criteria, such as compatibility with cargo, sufficient capacity, compliance with quality thresholds, and availability within 
+the required time window. In such cases, the platform applies a structured decision-making strategy to resolve the ambiguity and 
+finalize a unique match. First, the platform uses a proximity-based selection method grounded in a high-resolution H3 hexagonal 
+spatial grid. This technique allows for the precise localization of shippers and available trucks. Among the candidate matches, the 
+truck located closest to the shipper, based on the H3 spatial resolution, is selected. If multiple trucks fall within the same closest 
+hexagon, the proximity criterion alone is insufficient to determine a unique match.
+To resolve this, the platform then considers the offered prices among the remaining candidates. The truck with the lowest 
+bid that still satisfies all operational constraints is selected, thereby ensuring cost-effectiveness without compromising quality or 
+compatibility. If, after applying both proximity and price criteria, more than one eligible truck remains, the final selection is made 
+randomly. This tiered resolution process ensures fairness and maintains platform responsiveness under conditions of non-unique 
+solutions.
+4.4. VRPTW
+The primary objective of the VRPTW model is to minimize both travel time and cost. Each delivery point is associated with 
+a specific time window, denoted as [𝐸𝑖, 𝐿𝑖], where 𝐸 represents the earliest possible departure time and 𝐿 indicates the latest 
+permissible arrival time. These time windows are predetermined by the shipper and specified while generating the delivery request 
+on the platform. Through following the VRPTW model, the delivery operation begins from the shipper’s origin and delivers cargo to 
+multiple points within the specific time window (Toth and Vigo, 2002). The model produces an optimized delivery plan referred to as 
+the designed DOP. Each delivery point must be visited exactly once within its designated time window, and the operation concludes 
+at the truck’s garage. To ensure a sustainable solution, truck capacity information is incorporated into the model, enabling the 
+management of partially occupied and empty trucks. Managing truck capacity effectively allows for consolidation, ensuring that 
+when a truck has sufficient capacity to handle additional requests during the operation, the platform can optimize resource usage. 
+This leads to reduced traffic, lower 𝐶𝑂 2 emissions, and time savings. A consolidation constraint is therefore integrated into the 
+VRPTW model to address truck capacity, contributing to a more efficient and environmentally friendly delivery process.
+The VRPTW model is mathematically formulated as follows:
+𝑂𝑏𝑗3 = Min
+( 𝑁∑
+𝑗=0
+𝑁∑
+𝑖=0,𝑖≠𝑗
+𝑡𝑖𝑗 𝑥𝑖𝑗 +
+𝑁∑
+𝑖=0
+𝑁∑
+𝑗=0,𝑖≠𝑗
+𝑐𝑘
+𝑖𝑗 𝑥𝑖𝑗
+)
+(11)
+S.t.:
+𝑁∑
+𝑗∈𝛿+(0)
+𝑥0𝑗 = 1 (12)
+𝑁∑
+𝑖∈𝛿−(𝑁)
+𝑥𝑖𝑁 = 1 (13)
+𝑁∑
+𝑗∈𝛿+(𝑖)
+𝑥𝑖𝑗 = 1, ∀𝑖 (14)
+𝑁∑
+𝑗∈𝛿+(𝑖)
+𝑥𝑖𝑗 −
+𝑁∑
+𝑗∈𝛿−(𝑖)
+𝑥𝑗𝑖 = 0, ∀𝑖 (15)
+𝑥𝑖𝑗 (𝑤𝑖 + 𝜏𝑖 + 𝑡𝑖𝑗 − 𝑤𝑗 ) ≤ 0, ∀𝑖, 𝑗, 𝑖 ≠ 𝑗 (16)
+𝑎𝑖 ≤ 𝑤𝑖 ≤ 𝑏𝑖, ∀𝑖 (17)
+𝐸 ≤ 𝑤𝑖 ≤ 𝐿, ∀𝑖 (18)
+ℎ𝑗 − ℎ𝑖 + 𝑒𝑖
+𝑠 − 𝑓 𝑖
+𝑠 ≤ 𝑔𝑠(1 − 𝑥𝑖𝑗 ), ∀𝑖, 𝑗, 𝑖 ≠ 𝑗 (19)
+ℎ𝑗 − ℎ𝑖 + 𝑒𝑖
+𝑠 − 𝑓 𝑖
+𝑠 ≥ 𝑔𝑠(1 − 𝑥𝑖𝑗 ), ∀𝑖, 𝑗, 𝑖 ≠ 𝑗 (20)
+𝑥𝑖𝑗 ∈ {0, 1}, ∀𝑖, 𝑗 (21)
+𝑤𝑖 ≥ 0, ∀𝑖 (22)
+ℎ𝑖 ≥ 0, ∀𝑖 (23)
+Transportation Research Part C 179 (2025) 105290 
+10 
+
+===== PAGE 11 =====
+E.H. Sami et al.
+The objective function minimizes the total travel time and cost for the delivery operation. Constraint (12) ensures that each vehicle 
+departs from the shipper’s origin exactly once, while Constraint (13) guarantees that every vehicle completes its route at the carrier’s 
+garage. Constraint (14) specifies that each delivery point, excluding the origin and the final destination, must be visited exactly once. 
+The flow balance constraint, represented by Constraint (15), ensures that the delivery operation is consistent, with only one incoming 
+and one outgoing route for each point. Constraint (16) enforces that the total time spent at a delivery point, starting from the service 
+initiation, is less than or equal to the travel time to the subsequent point minus the service start time at that point. This ensures that 
+the delivery sequence respects the chronological order of arrival times. Constraints (17) and (18) ensure that all delivery points are 
+visited within their specific time windows, maintaining the operation’s schedule. Constraints (19) and (20) address truck capacity 
+by enforcing that the available capacity is sufficient to handle the delivery at each point, which contributes to optimizing resource 
+utilization and reducing environmental impact.
+One significant aspect of the model is the non-linear nature of Constraint (16). To address this, the Big-𝑀 method is applied, 
+introducing a sufficiently large constant 𝑈𝑖𝑗 . By linearizing the constraint, it is reformulated as follows: 
+(𝑤𝑖 + 𝜏𝑖 + 𝑡𝑖𝑗 − 𝑤𝑗 ) ≤ (1 − 𝑥𝑖𝑗 )𝑈𝑖𝑗 ∀𝑖, 𝑗, (𝑤𝑖 + 𝜏𝑖 + 𝑡𝑖𝑗 − 𝑤𝑗 ) ≥ (1 − 𝑥𝑖𝑗 )𝑈𝑖𝑗 ∀𝑖, 𝑗 (24)
+This reformulation ensures the model remains computationally efficient while maintaining its ability to produce accurate delivery 
+plans that meet the defined constraints.
+4.5. NCS matching - consolidation approach
+The consolidation approach allows for more efficient use of resources and optimized routing. One of our primary goals is to 
+reduce empty truck runs and decrease greenhouse gas emissions. To achieve this, we incorporate specific types of requests generated 
+by NCS, as well as requests for cargo delivery. We have proposed a new matching model to handle NCS requests on the platform. 
+This model considers three key parameters: region, available truck capacity, and cargo type. These parameters play a critical role 
+in ensuring effective matching. Although incorporating these factors might lead to a detour from the pre-designed DOP for the 
+truck, the shipper’s time window requirements are carefully addressed. Furthermore, it is important to account for en-route trucks 
+that may already be handling additional delivery services, as this consideration is essential for incorporating this feature into the
+platform. The aim is to enable better coordination and ensure that en-route trucks are utilized efficiently, minimizing idle time and 
+maximizing productivity. The proposed NCS matching model is designed to consolidate shipments and reduce the number of empty 
+en-route trucks. By incorporating NCS requests into the platform, the utilization of en-route trucks is increased by matching them 
+with available cargo. This will not only reduce empty trips but also optimize the overall transportation network. Minimizing the 
+number of empty trucks on the road conserves resources and reduces the environmental impact caused by unnecessary fuel usage 
+and emissions. The model assumes that the weight of cargo belonging to shipper 𝑠′ is 𝑔𝑠′ . Based on the results of the VRPTW model, 
+𝐺𝑖 represents the available capacity of truck 𝑘 derived from the capacity variable ℎ𝑖 in the VRPTW model. Therefore, 𝐺𝑖 is treated as 
+a parameter in the NCS matching model. The objective function of this model aims to maximize the matching between NCS requests 
+and en-route trucks. This is expressed as:
+𝑂𝑏𝑗4 = Max
+(
+∑
+𝑠∈𝑆′
+∑
+𝑘∈𝐾
+∑
+𝑐∈𝐶′′
+𝑀 𝑘
+𝑠𝑐
+)
+(25)
+S.t.: 𝑀 𝑘
+𝑠𝑐 ≤ 𝑙𝑘
+𝑠𝑐 , ∀𝑐 ∈ 𝑉𝐶′′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆′ (26)
+𝑀 𝑘
+𝑠𝑐 ≤ 𝑧𝑘
+𝑠𝑐, ∀𝑐 ∈ 𝑉𝐶′′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆′ (27)
+𝑀 𝑘
+𝑠𝑐 ⋅ 𝑔𝑠 ≤ 𝑏max
+𝑐𝑘 , ∀𝑐 ∈ 𝑉𝐶′′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆′ (28)
+𝑀 𝑘
+𝑠𝑐 ⋅ 𝑏min
+𝑐𝑘 ≤ 𝑔𝑠, ∀𝑐 ∈ 𝑉𝐶′′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆′ (29)
+𝑀 𝑘
+𝑠𝑐 ⋅ 𝑏min
+𝑐𝑘 ≤ 𝐺𝑘
+𝑐 + 𝑔𝑠, ∀𝑐 ∈ 𝑉𝐶′′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆′ (30)
+𝑀 𝑘
+𝑠𝑐 ⋅ (𝐺𝑘
+𝑐 + 𝑔𝑠) ≤ 𝑏max
+𝑐𝑘 , ∀𝑐 ∈ 𝑉𝐶′′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆′ (31)
+𝑀 𝑘
+𝑠𝑐 ∈ {0, 1}, ∀𝑐 ∈ 𝑉𝐶′′ , ∀𝑘 ∈ 𝑉𝐾 , ∀𝑠 ∈ 𝑉𝑆′ (32)
+The model enforces several constraints. A location constraint in line (26) ensures that the en-route truck is located in a hexagon 
+neighboring the NCS’s location. The compatibility constraint in the line (27) ensures that the truck type is compatible with the 
+cargo type. The capacity constraints in lines (28) to (31) ensure that the en-route truck can transport the cargo without exceeding 
+its capacity. Finally, the binary constraint in the line (32) ensures that the decision variable 𝑀 𝑘
+𝑠𝑐 can only take a value of 1 (indicating 
+a match) or 0 (indicating no match).
+Through this matching process, an en-route truck will be rematched with the NCS model to serve an NCS delivery request. If 
+the pre-designed DOP for the truck requires updates, the VRPTW model is re-executed to incorporate the new pick-up and delivery 
+points. If no match is found, the NCS matching model escalates to a higher H3 layer and retries. Delivery pricing for NCS requests is 
+set at a fixed 𝑃 𝑚𝑎𝑥
+𝑠 , with no bidding process, as per the OP policy. This encourages NCS to contract with the platform. This procedure 
+serves as an incentive to ensure fair pricing and maximize profits. NCSs can only generate single delivery-point requests. However, 
+entering into a contract provides opportunities for multiple delivery options at the lowest price, helping the platform manage demand 
+patterns better.
+Transportation Research Part C 179 (2025) 105290 
+11 
+
+===== PAGE 12 =====
+E.H. Sami et al.
+Algorithm 1 illustrates the sequence and conditions for model execution. The process begins with generating a delivery request 
+on the platform and applying the Pre-filter matching model to identify potential carrier matches. Eligible carriers participate in a 
+bidding process based on OPD pricing strategy, followed by the Main matching model to determine the best match. If the Main 
+matching model fails, the algorithm escalates to a higher search level, expanding the search area to include the nearest location to 
+the shipper, and retries the matching process. In cases where the Main matching results in multiple potential matches (i.e., more 
+than one carrier), the shipper selects their preferred carrier. Once a match is finalized, the platform executes the VRPTW model to 
+generate a DOP, which provides optimized routes and schedules. The delivery operation then commences from the shipper’s origin 
+based on the DOP. For NCS delivery requests, the platform employs the NCS matching model to fulfill these requests using available 
+en-route trucks. If no match is found, the model escalates to a higher H3 hexagonal layer and retries. The price of NCS requests 
+is calculated based on the OP strategy by the platform. If a detour is necessary for the truck to complete the delivery, the VRPTW 
+model is re-run to accommodate the new pickup and delivery points. The DOP is updated accordingly, and the operations proceed 
+based on the revised or pre-designed plan. The process concludes when the delivery operation is successfully completed, ensuring 
+efficient resource utilization, minimized empty truck routing, and adherence to time constraints.
+Algorithm 1 Sequential execution algorithm for dynamic matching and routing
+1: A delivery request generated 
+2: For 𝑉𝑆 , 𝑉𝑆′ ,𝑉𝐶 , 𝑉𝐾 do: 
+3: If the request is generated by CS, then: 
+4:   Run the Pre-filter matching model to determine eligible carriers
+ for the bidding process (𝑀 𝑘
+𝑠𝑐 , 𝑐 ∈ 𝑉𝐶 ), 
+5:   Calculate the bidding price based on the ODP pricing strategy (𝑝𝑚𝑎𝑥
+𝑠 ), 
+6:   Initiate the bidding process through eligible carriers (𝑀 𝑘
+𝑠𝑐 , 𝑐 ∈ 𝑉𝐶 ′ ), 
+7:   Pre-filtered carriers offer shipping prices based on their profit margins (𝑝𝑘
+𝑠𝑐 , 𝑐 ∈ 𝑉𝐶 ′ ), 
+8:   Run the Main matching model to determine the final matched carrier (𝑐 ∈ 𝑉𝐶 ′ ),
+9:   If no match occurs then: 
+10:   Apply a lower level of H3, notify eligible carriers of the matching failure
+ provide feedback, and go to Step 4, 
+11:   Elseif There is not unique match then: 
+12:   Decision making strategies (Proximity-based, Random selection) go to Step 13
+13:   Else Notify the shipper and the matched carrier of the completed matching process,
+14:   Run the VRPTW Model to determine the DOP
+ (𝑖, 𝑗 ∈ 𝑁, the set of visited points for the shipment request), 
+15:   Start the delivery operation from the shipper’s origin based on the DOP, 
+16:   If en-route truck was notified that a new NCS match occurs then:
+17:   Receive the updated DOP from the platform, 
+18:   Conclude the delivery operation with the selected truck, and go to Step 30, 
+19: If the request is generated by NCS then: 
+20:   Run the NCS matching model (𝑀 𝑘
+𝑠𝑐 , 𝑐 ∈ 𝑉𝐶 ′′ , 𝑠 ∈ 𝑆 ′), 
+21:   If No NCS match occurrs then: 
+22:   Apply a lower level of H3 and go to Step 20, 
+23:   Elseif There is not unique match then: 
+24:   Apply higher level of H3 and go to Step 20, 
+25:   Calculate the NCS request price based on the OP strategy, 
+26:   Notify the NCS, the matched en-route truck, and the carrier-owned truck, 
+27:   Run the VRPTW Model to align with the new NCS request and update the DOP, 
+28:   Send the updated DOP to the selected en-route truck (refer to 16), 
+29:   Conclude the delivery operation, 
+30: Inform the platform and shipper of the completed operation by the selected truck, 
+31: Declare the received service quality rating on the platform by CS.
+5. Experiments
+The case study focuses on Shiphual, a Montreal-based Canadian company, within the framework of a smart freight platform. 
+This platform is designed to optimize freight matching and routing by incorporating various stakeholders and their respective 
+attributes. It has established contracts with 300 shippers, ensuring their cargo is matched with the most suitable carriers and trucks for 
+delivery. Additionally, 100 shippers without contracts generate ad-hoc requests periodically, which the platform fulfills by identifying 
+uncommitted trucks available for delivery. The platform operates through a network of 100 carriers, each managing a fleet of at least 
+five trucks across three types — box, flatbed, and tanker — offering diverse transportation options and ensuring efficient service 
+coverage. To validate the model’s feasibility and constraint handling, we first tested it on a smaller dataset comprising 50 shippers, 
+20 carriers, and 3 trucks. Once the model demonstrated reliable performance, we applied it to a full-scale dataset reflective of the 
+company’s actual operations. The full dataset includes 400 delivery requests (300 CS and 100 NCS), 100 carriers, and a total of 500
+trucks (five per carrier, distributed among the three truck types). The largest scenario included 1,400 delivery requests (1,000 from 
+CS and 400 from NCS) and 100 carriers, each managing 50 trucks. Additional scenarios included varying the number of shippers, 
+carriers, and trucks to test performance under unbalanced supply–demand conditions—for example, cases with more shippers than 
+trucks and vice versa. These stress tests demonstrated that the model adapts well and maintains reasonable execution times, even 
+under heavy computational loads.
+Transportation Research Part C 179 (2025) 105290 
+12 
+
+===== PAGE 13 =====
+E.H. Sami et al.
+Table 4
+Data resolution.
+ Shipper data Carrier data Operation data  
+ Shipper ID Carrier ID Earliest time for operation  
+ Cargo type Trucks ID Latest time for operation  
+ Cargo weight (kg) Trucks type (Box, Flatbed, Tanker) Delivery point location 𝑖  
+ Expected service quality score Trucks available time (minute) Earliest time window (minute)  
+ Acceptable weight (kg) Latest time window (minute)  
+ Trucks last point location Origin location  
+ Trucks minimum and maximum capacity Loading/Unloading weight (kg)  
+ Carrier’s bidding offer Platform shipment price 𝑝𝑚𝑎𝑥
+𝑠  ($) 
+ Truck type tanker ∼ cargo type 2, 3, 8 Travel time  
+ Truck type Box ∼ cargo type 1, 4, 7 Travel cost  
+ Truck type Flatbed ∼ cargo type 5, 6, 9  
+Fig. 2. Shippers’ Locations and the H3 approach on the Montreal map.
+5.1. Data
+The dataset spans from 2023 to 2024 and focuses on the Montreal region. The model’s efficiency was initially evaluated using 
+a smaller sample, followed by a comprehensive analysis with a larger dataset that incorporates essential parameters for accurate 
+validation. The key attributes used in the models are summarized in Table  4, organized into shipper, carrier, and operational data. 
+Shipper data includes shipper ID, cargo type (classified into nine categories, labeled 1 to 9), cargo weight (in kilograms), and the 
+expected service quality score (ranging from 1 to 5). The cargo types were categorized based on their physical properties and 
+transportation requirements, then mapped to three truck types for appropriate matching. The nine cargo types used in this study 
+are as follows.
+• Cargo type 1: Electronic packaged goods.
+• Cargo type 2: Non-edible oils.
+• Cargo type 3: Lubricants.
+• Cargo type 4: Bottled or canned beverages.
+• Cargo type 5: Furniture.
+• Cargo type 6: Construction materials.
+• Cargo type 7: Dry packaged chemicals.
+• Cargo type 8: Industrial liquids.
+• Cargo type 9: Plastic or rubber products.
+Carrier data includes carrier ID, truck ID, and truck type, categorized into Box, Flatbed, or Tanker. Tanker trucks are designated 
+for liquid-based cargo (types 2, 3, and 8), flatbed trucks are used for large, irregularly shaped, or heavy items (types 5, 6, and 9), 
+and box trucks are assigned to packaged or fragile goods (types 1, 4, and 7). Carrier data also includes truck availability, service 
+quality score (from 1 to 5), bidding offer, garage/parking location, and acceptable weight range (minimum and maximum) for each 
+truck. Operation data outlines the earliest and latest time windows, origin and destination locations, loading and unloading weights, 
+as well as travel time and cost matrices. Platform’s maximum shipment price (𝑝𝑚𝑎𝑥
+𝑠 ) for delivery is also included. This comprehensive 
+dataset ensures efficient logistics operations and informed decision-making. The pricing algorithm is designed to be flexible and can 
+incorporate additional parameters to accommodate varying operational scenarios.
+Figs.  2(a) and 2(b) depict the geographic distribution of CS and NCS. In contrast, Fig.  2(c) overlays H3 hexagons on a Google 
+Map of Montreal. This hexagonal grid facilitates precise spatial analysis, enabling the optimization of routing and logistics strategies.
+Fig.  3 illustrates the distribution of delivery requests across different time intervals. The 𝑥-axis represents various time periods, 
+while the 𝑦-axis shows the number of total delivery requests. The peak request periods are between 10 ∶ 00 – 13 ∶ 00 and 19 ∶ 01 – 
+22 ∶ 00 , accounting for approximately 38% of the total requests. These insights emphasize the need to allocate more resources, such 
+Transportation Research Part C 179 (2025) 105290 
+13 
+
+===== PAGE 14 =====
+E.H. Sami et al.
+Fig. 3. Request abundance per time interval.
+as trucks and drivers, during peak hours. During lower activity periods, resources can be redirected toward maintenance, training, 
+or other operational tasks. From a fleet utilization perspective, approximately 35% of delivery requests are compatible with tanker 
+trucks (serving liquid cargo categories), 34% require box trucks (mainly the packaged goods and the remaining 31% are suited for 
+flatbed trucks (aligned with construction and oversized items). This distribution reflects the diverse and balanced demand for each 
+truck type in the dataset.
+5.2. Sensitivity analysis on matching and routing
+This section evaluates the platform’s performance in processing 300 simultaneous delivery requests from 300 different shippers, 
+focusing on its ability to handle high demand efficiently while optimizing resource utilization and meeting sustainability objectives. 
+Fig.  4(a) illustrates the results of the Pre-filter and Main matching models. The 𝑥-axis represents the Shipper IDs, while the 𝑦-
+axis indicates the Carrier IDs, with each truck ID distinguished by a unique color. The scatter plot visually demonstrates the 
+matches between shippers and carriers. An analysis of the Pre-filter matching efficiency reveals that the mechanism effectively 
+pairs a diverse range of shippers and carriers. The broad distribution and clustering within the plot indicate that the Pre-filter step 
+successfully identifies competitive carriers for each request, enabling them to offer prices based on the platform-defined 𝑝𝑚𝑎𝑥
+𝑠 . For 
+each preliminary match, the platform initiates a bidding process managed by the Main matching model. This model determines the 
+most suitable shipper–carrier pair based on submitted bids and operational requirements.
+Fig.  4(b) shows the output of the Main matching process. The relative distribution of truck types in the matches suggests efficient 
+utilization of the available fleet without significant bias toward any specific truck type. This visual distribution reflects that no single 
+truck type dominates the matching process. To support this observation, we calculated the match ratio for each truck type. Each 
+type — box, flatbed, and tanker — was involved in approximately 31% to 34% of the total matches. This balanced usage confirms 
+that the platform does not disproportionately favor a specific truck type and demonstrates the model’s ability to promote unbiased 
+and efficient fleet utilization. The Main matching model refines the initial matches from the Pre-filter process, though it does not 
+always yield unique matches. In such cases, the platform employs tie-breaking strategies to ensure the practical final assignments 
+are determined.
+Once the matches are finalized, the delivery operation begins from the shipper’s origin. The platform executes the VRPTW model 
+for all matched pairs to develop a prioritized delivery plan, referred to as the DOP. Fig.  5 illustrates the DOP for Shipper ID 120, 
+detailing the delivery sequence. In this plan, 𝑤[𝑖] indicates the truck’s arrival time at each delivery point, while ℎ[𝑖] shows the truck’s 
+available capacity at each location. Time window constraints and truck capacity are incorporated in the VRPTW model to enable 
+effective route planning.
+As discussed in Section 4.5, the platform implements a consolidation-based matching process for NCS to optimize truck capacity 
+utilization and reduce empty truck trips. When an NCS generates a request, the NCS matching model pairs it with an en-route truck. 
+The truck’s remaining capacity, predetermined in the DOP, is used as a key constraint in this process. This approach enhances overall 
+efficiency by making full use of available resources.
+The scatter plot in Fig.  6 illustrates that for all scenarios of shipper requests, the routing cost increased after applying the 
+consolidation constraint in the VRPTW model. This increase varies by shipper, typically ranging from 1% to 8%. The consolidation 
+constraint in our framework is designed to reduce underutilized trips. This consolidation leads to additional planning complexity 
+and potentially longer routes or slightly increasing unit prices. However, it enables a more efficient utilization of available truck 
+capacity. Despite the price increase, consolidation helped the platform to satisfy approximately 39% more requests compared to the 
+unconsolidated case. This significant increase in serving demand is a notable operational achievement and directly contributes to 
+increased revenue. Although shipping costs increased per unit, total revenue increased as the number of requests processed increased 
+by 39%. It means that more demand was successfully matched and satisfied. Additionally, this consolidation results in fewer empty 
+or underutilized trucks and spreads operating fixed costs across more shipments. This reduces the cost of each delivery from the 
+carriers’ perspective, maintaining or improving their profit margins even at slightly higher expense. Moreover, the platform benefits 
+from increased transactions and improved match rate, which are typically associated with better platform performance.
+Transportation Research Part C 179 (2025) 105290 
+14 
+
+===== PAGE 15 =====
+E.H. Sami et al.
+Fig. 4. Matching results.
+Fig. 5. Shipper ID 120’s data and DOP.
+Fig. 6. Routing cost comparison analysis before and after NCS matching.
+5.3. Sensitivity analysis on execution times
+Given the platform’s dynamic nature, execution time is a critical factor influencing stakeholder satisfaction and long-term 
+cooperation. The efficiency and speed at which matching and routing models are executed determine the platform’s ability to handle 
+real-time requests, adapt to changing conditions, and maintain high-quality service. Optimizing execution times is therefore essential 
+for ensuring operational reliability, reducing overhead, and maintaining scalable system performance. All models were implemented 
+using CPLEX and tested on a laptop equipped with 16 GB of RAM.
+To analyze the platform’s performance under varying operational conditions, we simulated multiple scenarios using the historical 
+Transportation Research Part C 179 (2025) 105290 
+15 
+
+===== PAGE 16 =====
+E.H. Sami et al.
+Fig. 7. Execution time analysis.
+Fig. 8. Execution time analysis with relaxed equation(s) in matching models.
+data. These simulations evaluated how changes in the number of shippers, carriers, and trucks affect computational efficiency. By 
+leveraging real-world configurations, we assessed the robustness and scalability of the models under varying conditions. This helped 
+us assess its robustness and scalability, ensuring it works effectively in various conditions.
+Fig.  7 illustrates the average execution times observed in large-scale matching operations. The results indicate that the models 
+demonstrate stable and efficient performance across different dataset sizes. As shown in Fig.  7(a), execution time remains largely 
+unaffected by increases in the number of carriers. This suggests that the system scales efficiently with added participants. Based on 
+this insight, the platform’s best strategy is not to onboard more carriers, but rather to encourage existing carriers to diversify their 
+fleets by incorporating a wider range of truck types. This approach improves delivery coverage and resource utilization without 
+significantly increasing computational cost. Fig.  7(b) demonstrates execution time in smaller configurations (k = 5). It shows that 
+the execution time remains low and stable over different settings. For instance, in a scenario with 1000 shippers and 100 carriers, 
+each managing 5 trucks, the platform completed matching and routing tasks in 4.84 min.
+To evaluate the influence of different constraints, Fig.  8 presents execution times across various equation relaxations. These are 
+closely clustered, ranging between 4.20 and 4.35 min for a baseline configuration of S = 100, C = 100, and K = 5. Although the 
+variation is minimal, these results provide insights into the computational demands of individual constraints and confirm that none 
+introduce significant overhead.
+5.4. Sensitivity analysis on consolidation
+We implemented a multifaceted strategy to enhance the efficiency and sustainability of our platform, focusing on optimizing 
+resource utilization and reducing environmental impact. A key component of this strategy involves applying NCS matching for 
+en-route trucks. This approach has significantly enhanced resource utilization and reduced the frequency of empty truck travel. 
+Previously, NCS requests were matched with idle or unused trucks, which often resulted in each truck serving a single request, even 
+if it had unused capacity while en route. This inefficiency not only led to suboptimal resource management but also contributed to 
+Transportation Research Part C 179 (2025) 105290 
+16 
+
+===== PAGE 17 =====
+E.H. Sami et al.
+Fig. 9. NCSs matching before & after improvement strategy.
+significant environmental challenges. Our approach pairs NCS requests with trucks already engaged in deliveries rather than relying 
+on idle trucks. This method not only optimizes the use of each truck’s capacity but also diminishes the overall distance traveled 
+without cargo.
+Fig.  9 indicates a significant increase in NCS matches, rising from 17 before the improvement strategy to 56 afterward. On 
+one hand, increasing the matching rate guarantees profit growth and prevents losses. On the other hand, by matching en-route 
+trucks instead of idle ones, resource utilization improved by approximately 39%. This optimization significantly reduces empty 
+truck routing, contributing to daily gas emission reductions.
+To assess the broader impact, we analyzed performance using Shiphaul’s historical dataset. We compared matching outcomes 
+across a range of configurations before and after applying the NCS matching mechanism. Fig.  10 shows that enabling NCS matching 
+not only improves system performance, but also increases the number of matched deliveries across various test scenarios. For 
+instance, in a configuration with 400 shippers, 100 carriers, and 5 trucks per carrier, the number of successful matches increased 
+from 20 to 198—an increase of nearly 45%. Across all tested configurations, the matching rate improved from approximately 21% 
+to 50%. This consolidation strategy directly contributes to environmental sustainability by reducing the number of empty truck 
+routes. To quantify the impact, we reference standard emissions benchmarks in freight transportation studies (Raghunatha et al., 
+2023; Corbett et al., 2008). On average, an empty truck emits about 20 kg of 𝐶𝑂 2, 50 grams of 𝑁𝑂 𝑥, and 2 grams of particulate 
+matter (PM) per hour. Assuming a typical 12-hour daily operation window, the observed 39% reduction in empty truck usage leads 
+to measurable environmental gains:
+• 𝐶𝑂 2 emissions reduced by 39 trucks ×  20 kg/hr ×  12 hr = 9360 kg/day ( 9.36 tons/day)
+• 𝑁𝑂 𝑥 emissions reduced by 39 trucks ×  50 g/hr ×  12 hr = 23.4 kg/day
+• PM emissions reduced by 39 trucks ×  2 g/hr ×  12 hr = 936 g/day
+These values clearly demonstrate that the platform achieves not only operational but also environmental efficiency. The 9-ton daily 
+reduction in 𝐶𝑂 2 emissions is particularly noteworthy when viewed in the context of urban freight logistics, where emissions 
+reduction is a key policy and societal objective. This improvement is also linked to reduced congestion, as fewer trucks are deployed 
+on the roads. Lower traffic volumes contribute to smoother urban mobility, decreased travel delays, and enhanced road safety. By 
+fulfilling more requests using fewer resources, the platform also improves its overall delivery capacity, leading to higher customer 
+satisfaction and profitability.
+In summary, the reported 39% reduction in empty truck routing is not only a technical optimization but a measurable 
+contributor to fuel savings, emissions reduction, and improved operational efficiency. It reflects a systemic shift from reactive to 
+proactive logistics planning, transforming how the platform leverages real-time capacity and positioning to deliver economic and 
+environmental benefits.
+6. Conclusion
+This study proposes a new smart freight platform designed to optimize matching and routing, while improving environmental 
+sustainability. By reducing the number of empty trucks operating en route, the platform helped alleviate urban congestion and 
+supported community well-being, amplifying its positive ecological and societal contributions.
+Social and economic impact The introduction of a sequential matching mechanism significantly improved system accuracy and 
+resource efficiency. A dynamic bidding strategy for pre-filtered carriers enhanced the fairness and competitiveness of the pricing 
+process. This incentivized NCS to engage with the platform and promoted equitable service conditions for all participants. Aligning 
+NCS requests with en-route trucks helped reduce the number of empty trips, which in turn decreased fuel consumption, gas emissions, 
+and urban traffic congestion while boosting stakeholder satisfaction and overall profitability. The platform’s social and economic 
+impact was further reinforced by minimizing the need for idle vehicle deployment.
+Environmental and economic benefits The operational enhancements led to a 39% reduction in empty truck routing, which translated 
+Transportation Research Part C 179 (2025) 105290 
+17 
+
+===== PAGE 18 =====
+E.H. Sami et al.
+Fig. 10. NCS matching rate comparison by scenario.
+into a substantial drop in 𝐶𝑂 2, 𝑁𝑂 𝑥, and PM emissions. This improvement was achieved by transitioning from dispatching idle 
+trucks to redirecting en-route vehicles to serve new NCS requests. This shift reduced redundant mileage and optimized capacity 
+usage. Based on standard emissions estimates, 20 kg 𝐶𝑂 2 per truck per hour, a 12-hour reduction in 39 empty truck trips equates to 
+over 9 tons of 𝐶𝑂 2 emissions saved daily. This contribution aligns with global decarbonization goals and emphasizes the platform’s 
+commitment to sustainable logistics. In parallel, profit margins increased due to more efficient utilization of assets and the ability 
+to fulfill more delivery requests without incurring additional costs.
+Limitation and future research The results validate the model’s success and provide a foundation for future innovation in urban freight 
+systems. However, the study’s findings also highlight some limitations. First, the model is constrained to the local infrastructure data, 
+demand patterns, and regulatory conditions specific to the area. These contextual factors may limit the direct transferability of results 
+to other geographical locations with differing operational environments, traffic dynamics, or policy frameworks. Second, the truck 
+classification used in this study is limited to three types — box, flatbed, and tanker — reflecting the most common vehicle types 
+in our dataset. While sufficient for the studied context, this classification may not capture the full diversity of logistics fleets in 
+other regions, such as refrigerated vehicles, electric vans, or high-capacity long-haul trucks. Fortunately, truck type is treated as an 
+exogenous parameter in the model, which means that it can be updated or expanded with minimal computational overhead. Third, 
+although the model allows partial consolidation for NCS deliveries, it does not yet support multi-shipment consolidation for CS.
+While the current model assumes that each shipment can be accommodated by a single truck, future implementations can adopt 
+preprocessing techniques — such as dividing oversized loads into sub-requests — to improve feasibility and generalization in more 
+complex delivery scenarios. Future research should aim to expand the geographical scope of the model, integrate a wider variety 
+of vehicle types and cargo categories, and incorporate advanced features such as predictive analytics and artificial intelligence for 
+dynamic decision-making. In addition, broader consolidation strategies and more complex routing constraints should be explored to 
+further enhance both economic and environmental performance. Finally, continuously improving feedback mechanisms for platform 
+users will help stakeholders optimize their operations and support real-time decision-making in dynamic freight environments.
+CRediT authorship contribution statement
+Elham Haji Sami: Writing – review & editing, Writing – original draft, Visualization, Validation, Software, Methodology, 
+Investigation, Formal analysis, Conceptualization. Ahmad Shahnejat Bushehri: Writing – review & editing, Project administration. 
+Ashkan Amirnia: Writing – review & editing, Project administration. Asad Yarahmadi: Data curation. Samira Keivanpour: 
+Supervision, Resources, Project administration, Funding acquisition.
+Ethics
+This study did not involve human subjects, animal experimentation, or data from social media platforms requiring ethics 
+approval.
+Funding
+This work was supported by Shiphual Logistics and Mitacs under the Mitacs Accelerate program IT30680.
+Transportation Research Part C 179 (2025) 105290 
+18 
+
+===== PAGE 19 =====
+E.H. Sami et al.
+Declaration of competing interest
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared 
+to influence the work reported in this paper.
+Data availability
+The data supporting the findings of this research study are available from the corresponding author upon reasonable request.
+References
+Agatz, N., Erera, A., Savelsbergh, M., Wang, X., 2012. Optimization for dynamic ride-sharing: A review. European J. Oper. Res. 223 (2), 295–303.
+Allahviranloo, M., Bouyeure, C., 2022. Online platform for matching and trading shares of autonomous vehicles. Transp. Res. Rec. 2676 (3), 685–695.
+Ausseil, R.H.J., 2022. Dynamic Methods for Matching Requests to Suppliers in Transportation Platforms. Rensselaer Polytechnic Institute.
+Birol, F., 2009. World Energy Outlook 2006. International Energy Agency.
+Bukoye, O.T., Gadiraju, S., 2022. Optimal consolidation center to improve urban freight transport: A case of student accommodation in a higher education 
+institution. Multimodal Transp. 1 (3), 100032.
+Bˇadiˇa, C., Leon, F., Bˇadiˇa, A., 2020. Freight transportation broker agent based on constraint logic programming. Evol. Syst. 11 (3), 363–382.
+Cavalcante, R.A., Roorda, M.J., 2013. Freight market interactions simulation (FREMIS): An agent-based modeling framework. Procedia Comput. Sci. 19, 867–873.
+Corbett, J.J., Winebrake, J.J., Hatcher, J., Farrell, A.E., 2008. Emissions analysis of freight transport comparing land-side and water-side short-sea routes: 
+Development and demonstration of a freight routing and emissions analysis tool (FREAT).
+Crainic, T.G., Ricciardi, N., Storchi, G., 2009. Models for evaluating and planning city logistics systems. Transp. Sci. 43 (4), 432–454.
+Dai, B., Wang, M., Ke, J., 2023. Implications of product line competition on channel matching strategies in a retail platform. Naval Res. Logist. 70 (2), 145–164. 
+http://dx.doi.org/10.1002/nav.22088.
+De Ruijter, A., Cats, O., Alonso-Mora, J., Hoogendoorn, S., 2023. Ride-pooling adoption, efficiency and level of service under alternative demand, behavioural 
+and pricing settings. Transp. Plan. Technol. 46 (4), 407–436.
+Demir, E., Huang, Y., Scholts, S., Van Woensel, T., 2015. A selected review on the negative externalities of the freight transportation: Modeling and pricing. 
+Transp. Res. Part E: Logist. Transp. Rev. 77, 95–114.
+Enthoven, D.L., Jargalsaikhan, B., Roodbergen, K.J., Uit het Broek, M.A., Schrotenboer, A.H., 2020. The two-echelon vehicle routing problem with covering 
+options: City logistics with cargo bikes and parcel lockers. Comput. Oper. Res. 118, 104919.
+Furuhata, M., Dessouky, M., Ordóñez, F., Brunet, M.-E., Wang, X., Koenig, S., 2013. Ridesharing: The state-of-the-art and future directions. Transp. Res. Part B: 
+Methodol. 57, 28–46.
+Gale, D., Shapley, L.S., 1962. College admissions and the stability of marriage. Am. Math. Mon. 69 (1), 9–15.
+Gu, T., Xu, W., Shi, P., Wang, R., Kim, I., 2024. Taxi in competition with online car-hailing drivers: Policy implication to operating strategies. Multimodal Transp. 
+3 (2), 100129.
+van Heeswijk, W., 2022. Strategic bidding in freight transport using deep reinforcement learning. Ann. Oper. Res. 1–38.
+Heinbach, C., Meier, P., Thomas, O., 2022. Designing a shared freight service intelligence platform for transport stakeholders using mobile telematics. Inf. Syst. 
+E- Bus. Manag. 20 (4), 847–888.
+Holguín-Veras, J., Patil, G.R., 2008. A multicommodity integrated freight origin–destination synthesis model. Netw. Spat. Econ. 8, 309–326.
+Jiao, Z., Ran, L., Liu, X., Zhang, Y., Qiu, R.G., 2020. Integrating price-incentive and trip-selection policies to rebalance shared electric vehicles. Serv. Sci. 12 (4), 
+148–173. http://dx.doi.org/10.1287/serv.2020.0266.
+Karam, A., Reinau, K.H., 2022. A real-time decision support approach for managing disruptions in line-haul freight transport networks. IEEE Trans. Intell. Transp. 
+Syst. 23 (12), 24765–24777.
+Li, F., Guo, X., Zhou, L., Wu, J., Li, T., 2022. A capacity matching model in a collaborative urban public transport system: integrating passenger and freight 
+transportation. Int. J. Prod. Res. 60 (20), 6303–6328.
+Li, L., Lin, X., Negenborn, R.R., De Schutter, B., 2015. Pricing intermodal freight transport services: A cost-plus-pricing strategy. In: Corman, F., Voß, S., 
+Negenborn, R.R. (Eds.), Computational Logistics. Springer International Publishing, Cham, pp. 541–556.
+Li, Y., Liu, Y., 2021. Optimizing flexible one-to-two matching in ride-hailing systems with boundedly rational users. Transp. Res. Part E: Logist. Transp. Rev. 
+150, 102329.
+Li, J., Zheng, Y., Dai, B., Yu, J., 2020. Implications of matching and pricing strategies for multiple-delivery-points service in a freight O2O platform. Transp. 
+Res. Part E: Logist. Transp. Rev. 136, 101871.
+Lv, Z., Zhang, Y., Ji, Z., Deng, F., Shi, M., Li, Q., He, M., Xiao, L., Huang, Y., Liu, H., et al., 2023. A real-time NOx emission inventory from heavy-duty vehicles 
+based on on-board diagnostics big data with acceptable quality in China. J. Clean. Prod. 422, 138592.
+Mei, Q., Li, J., Ursavas, E., Zhu, S.X., Luo, X., 2021. Freight transportation planning in platform service supply chain considering carbon emissions. Int. J. Prod. 
+Econ. 240, 108241. http://dx.doi.org/10.1016/j.ijpe.2021.108241.
+Mukhopadhyay, S.K., Setaputra, R., 2006. The role of 4PL as the reverse logistics integrator: Optimal pricing and return policies. Int. J. Phys. Distrib. Logist. 
+Manage. 36 (9), 716–729.
+Nam, H., Lee, T., Lee, J., Chung, H., 2013. Design of carrier-based offshore CCS system: Plant location and fleet assignment. Int. J. Greenh. Gas Control. 12, 
+220–230.
+Özkan, E., 2020. Joint pricing and matching in ride-sharing systems. European J. Oper. Res. 287 (3), 1149–1160.
+Padidar, M., Keivanpour, S., Ali, M.B., 2023. A Hybrid Modeling Approach to Joint Matching and Pricing in an Intelligent Freight Transportation Platform. 
+Bureau de Montreal, Université de Montreal.
+Padmanabhan, B., Huynh, N., Ferrell, W., Badyal, V., 2023. Evaluation of three collaboration and profit sharing methods for carriers in pickup-and-delivery 
+problems. Multimodal Transp. 2 (2), 100066.
+Pfrommer, J., Warrington, J., Schildbach, G., Morari, M., 2014. Dynamic vehicle redistribution and online price incentives in shared mobility systems. IEEE 
+Trans. Intell. Transp. Syst. 15 (4), 1567–1578.
+Qiu, J., Huang, K., Hawkins, J., 2022. The taxi sharing practices: Matching, routing and pricing methods. Multimodal Transp. 1 (1), 100003.
+Raghunatha, A., Lindkvist, E., Thollander, P., Hansson, E., Jonsson, G., 2023. Critical assessment of emissions, costs, and time for last-mile goods delivery by 
+drones versus trucks. Sci. Rep. 13 (1), 11814.
+Roorda, M.J., Cavalcante, R., McCabe, S., Kwan, H., 2010. A conceptual framework for agent-based modelling of logistics services. Transp. Res. Part E: Logist. 
+Transp. Rev. 46 (1), 18–31.
+Solomon, M.M., 1987. Algorithms for the vehicle routing and scheduling problems with time window constraints. Oper. Res. 35 (2), 254–265.
+Transportation Research Part C 179 (2025) 105290 
+19 
+
+===== PAGE 20 =====
+E.H. Sami et al.
+Song, M., Roh, S., Lee, H., 2024. Exploring the implications of logistics efficiency and renewable energy for sustainable development. Environ. Dev. Sustain. 
+1–22.
+Sühr, T., Biega, A.J., Zehlike, M., Gummadi, K.P., Chakraborty, A., 2019. Two-sided fairness for repeated matchings in two-sided markets: A case study of a 
+ride-hailing platform. In: Proceedings of the 25th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining. pp. 3082–3092.
+Toth, P., Vigo, D., 2002. The Vehicle Routing Problem. SIAM.
+Walunj, T.S., Singhal, S., Kavitha, V., Nair, J., 2022. Pricing, competition and market segmentation in ride hailing. In: 2022 58th Annual Allerton Conference 
+on Communication, Control, and Computing. Allerton, IEEE, pp. 1–8.
+Wang, L., Gao, S., Wang, K., Li, T., Li, L., Chen, Z., 2020a. Time-dependent electric vehicle routing problem with time windows and path flexibility. J. Adv. 
+Transp. 2020 (1), 3030197.
+Wang, Z., Li, Y., Gu, F., Guo, J., Wu, X., 2020b. Two-sided matching and strategic selection on freight resource sharing platforms. Phys. A 559, 125014.
+Wang, J., Li, M., Wang, X., Yang, H., 2025. Modelling the impacts of en-route ride-pooling service in a mixed pooling and non-pooling market. Transp. Res. 
+Part B: Methodol. 191, 103106.
+Wang, Z., Yan, Q., Wang, L., Hei, X., 2023. Solving the vehicle routing problem with time window based on reinforcement learning. In: 2023 19th International 
+Conference on Natural Computation, Fuzzy Systems and Knowledge Discovery. ICNC-FSKD, IEEE, pp. 1–7.
+Wang, H., Zhang, X., Wang, S., 2016. A joint optimization model for liner container cargo assignment problem using state-augmented shipping network framework. 
+Transp. Res. Part C: Emerg. Technol. 68, 425–446.
+Xu, Y., Çolak, S., Kara, E.C., Moura, S.J., González, M.C., 2018. Planning for electric vehicle needs by coupling charging profiles with urban mobility. Nat. 
+Energy 3 (6), 484–493.
+Xu, L., Shi, J., Chen, J., 2021. Platform encroachment with price matching: introducing a self-constructing online platform into the sea-cargo market. Comput. 
+Ind. Eng. 156, 107266.
+Yan, P., Lee, C.-Y., Chu, C., Chen, C., Luo, Z., 2021. Matching and pricing in ride-sharing: Optimality, stability, and financial sustainability. Omega 102, 102351.
+Yang, B., Han, K., Tu, W., Ge, Q., 2023. Fairness in online vehicle-cargo matching: An intuitionistic fuzzy set theory and tripartite evolutionary game approach. 
+arXiv preprint arXiv:2310.18657.
+Zhang, H., Song, J., Guo, S., Wu, B., 2024. Optimization of real-time dynamic cargo stowage at highway freight stations. Soft Comput. 28 (1), 791–809.
+Transportation Research Part C 179 (2025) 105290 
+20 

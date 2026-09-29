@@ -21,6 +21,13 @@
           <a href="/comparacao">Ir para central de comparação</a>
         </div>
 
+        <div class="map-selector-wrap">
+          <label for="road-network">Malha viária</label>
+          <select id="road-network" disabled>
+            <option>Carregando malhas…</option>
+          </select>
+        </div>
+
         <section class="panel-section point-controls">
           <div class="section-heading">
             <h2>Pontos</h2>
@@ -64,6 +71,27 @@
             <option value="bidirectional">Bidirecional</option>
           </select>
 
+          <label for="order-strategy" class="model-type-label">Ordenação das paradas</label>
+          <select id="order-strategy">
+            <option value="priority">Prioridade por prazo</option>
+            <option value="ils">ILS com 2-opt</option>
+          </select>
+
+          <div id="ils-controls" hidden>
+            <label for="order-budget" class="model-type-label">Orçamento do ILS</label>
+            <select id="order-budget">
+              <option value="250">250 ms</option>
+              <option value="500" selected>500 ms</option>
+              <option value="1000">1 segundo</option>
+              <option value="3000">3 segundos</option>
+            </select>
+          </div>
+
+          <label class="exploration-option compact-option" for="return-to-start">
+            <input id="return-to-start" type="checkbox" />
+            <span>Retornar ao primeiro ponto</span>
+          </label>
+
           <label for="average-speed" class="speed-label">
             Velocidade padrão para vias sem dados
             <span><strong id="speed-value">40</strong> km/h</span>
@@ -102,7 +130,9 @@
           </div>
           <div class="metric-grid">
             <div class="metric-card"><span>Distância</span><strong id="total-distance">—</strong></div>
-            <div class="metric-card"><span>Tempo de viagem</span><strong id="estimated-time">—</strong></div>
+            <div class="metric-card"><span>Deslocamento</span><strong id="estimated-time">—</strong></div>
+            <div class="metric-card"><span>Planejamento</span><strong id="planning-time">—</strong></div>
+            <div class="metric-card"><span>Busca viária</span><strong id="search-time">—</strong></div>
             <div class="metric-card computation"><span>Tempo de cálculo</span><strong id="computation-time">—</strong></div>
             <div class="metric-card"><span>Corredor H3</span><strong id="h3-metric">—</strong></div>
             <div class="metric-card"><span>Pontos</span><strong><b id="pickup-total">—</b> C · <b id="delivery-total">—</b> E</strong></div>
@@ -150,8 +180,8 @@
       <form id="delivery-form">
         <div class="dialog-header">
           <div>
-            <h2 id="delivery-dialog-title">Prazo da entrega</h2>
-            <p>Informe quanto tempo falta até o vencimento.</p>
+            <h2 id="delivery-dialog-title">Configurar parada</h2>
+            <p>Informe quanto tempo falta para o prazo da entrega.</p>
           </div>
           <button id="close-delivery-dialog" class="dialog-close" type="button" aria-label="Fechar">×</button>
         </div>

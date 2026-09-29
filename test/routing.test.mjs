@@ -7,6 +7,7 @@ import { dfs } from "../src/algorithms/DFS.js";
 import { dijkstra } from "../src/algorithms/Dijkstra.js";
 import {
   assembleMultiStopRoute,
+  buildStopTravelTimeMatrix,
   buildPathResult,
   buildRoutingGraph,
   connectStopsToGraph,
@@ -15,6 +16,7 @@ import {
   findStopsOnPath,
   prioritizeStopOrder,
 } from "../src/algorithms/routing.mjs";
+import { optimizeStopOrderIls } from "../src/algorithms/StopOrderILS.js";
 
 const rawGraph = {
   nodes: [
@@ -239,6 +241,67 @@ test("rota A* com múltiplas paradas concatena os trechos", () => {
   assert.equal(result.distanceMeters, 300);
   assert.deepEqual(result.nodeIds, [1, 2, 3, 4]);
   assert.equal(result.segments.length, 2);
+});
+
+test("rota considera apenas o tempo de deslocamento", () => {
+  const stops = [
+    { id: "a", nodeId: 1, name: "Coleta" },
+    { id: "b", nodeId: 3, name: "Entrega" },
+  ];
+  const result = assembleMultiStopRoute(stops, [
+    buildPathResult(routingGraph, aStar({ grafo: rawGraph, inicio: 1, destino: 3 })),
+  ]);
+
+  assert.equal(result.travelTimeSeconds, 19.8);
+});
+
+test("matriz de tempos preserva assimetria da malha viária", async () => {
+  const directedGraph = buildRoutingGraph({
+    nodes: [
+      { id: "a", latitude: 0, longitude: 0 },
+      { id: "b", latitude: 0, longitude: 0.001 },
+    ],
+    edges: [
+      { from: "a", to: "b", distance_m: 100, travel_time_s: 10 },
+      { from: "b", to: "a", distance_m: 100, travel_time_s: 30 },
+    ],
+  });
+  const matrix = await buildStopTravelTimeMatrix(directedGraph, [
+    { id: "a", nodeId: "a" },
+    { id: "b", nodeId: "b" },
+  ]);
+
+  assert.equal(matrix.get("a").get("b"), 10);
+  assert.equal(matrix.get("b").get("a"), 30);
+});
+
+test("ILS mantém coletas antes das entregas e prioriza violações de prazo", async () => {
+  const departureTimeMs = Date.parse("2026-09-22T08:00:00Z");
+  const stops = [
+    { id: "p2", nodeId: "p2", type: "pickup" },
+    { id: "p1", nodeId: "p1", type: "pickup" },
+    { id: "d2", nodeId: "d2", type: "delivery", deadline: "2026-09-22T10:00:00Z" },
+    { id: "d1", nodeId: "d1", type: "delivery", deadline: "2026-09-22T08:10:00Z" },
+  ];
+  const ids = stops.map((stop) => stop.nodeId);
+  const matrix = new Map(ids.map((from) => [
+    from,
+    new Map(ids.map((to) => [from, to]).map(([a, b]) => [b, a === b ? 0 : 100])),
+  ]));
+  matrix.get("d2").set("d1", 1000);
+
+  const optimized = await optimizeStopOrderIls({
+    stops,
+    initialOrder: stops,
+    departureTimeMs,
+    travelTimeMatrix: matrix,
+    budgetMs: 50,
+  });
+
+  const types = optimized.stops.map((stop) => stop.type);
+  assert.deepEqual(types, ["pickup", "pickup", "delivery", "delivery"]);
+  assert.equal(optimized.metrics.lateCount, 0);
+  assert.ok(optimized.evaluations > 0);
 });
 
 test("ponto solto é associado ao nó mais próximo", () => {

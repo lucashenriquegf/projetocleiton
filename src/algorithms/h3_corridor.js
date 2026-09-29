@@ -6,6 +6,7 @@
  */
 
 const EARTH_RADIUS_M = 6_371_000;
+const corridorIndexCache = new WeakMap();
 
 export function getH3() {
   if (typeof window !== "undefined" && window.h3) {
@@ -105,36 +106,29 @@ export function filterGraphByCorridor(
     return graph;
   }
 
+  const index = getCorridorIndex(graph, resolution, h3);
   const allowedNodeIds = new Set();
-  const filteredNodes = [];
 
-  for (const node of graph.nodes) {
-    if (node.id === startNodeId || node.id === targetNodeId) {
-      allowedNodeIds.add(node.id);
-      filteredNodes.push(node);
-      continue;
-    }
-
-    node._h3Cells = node._h3Cells || {};
-    let cell = node._h3Cells[resolution];
-    if (!cell) {
-      cell = h3.latLngToCell(Number(node.latitude), Number(node.longitude), resolution);
-      node._h3Cells[resolution] = cell;
-    }
-
-    if (allowedH3Cells.has(cell) && !blockedH3Cells.has(cell)) {
-      allowedNodeIds.add(node.id);
-      filteredNodes.push(node);
+  for (const cell of allowedH3Cells) {
+    if (blockedH3Cells.has(cell)) continue;
+    for (const nodeId of index.nodeIdsByCell.get(cell) || []) {
+      allowedNodeIds.add(nodeId);
     }
   }
 
   if (startNodeId) allowedNodeIds.add(startNodeId);
   if (targetNodeId) allowedNodeIds.add(targetNodeId);
 
+  const filteredNodes = [];
+  for (const nodeId of allowedNodeIds) {
+    const node = index.nodesById.get(nodeId);
+    if (node) filteredNodes.push(node);
+  }
+
   const filteredEdges = [];
-  for (const edge of graph.edges) {
-    if (allowedNodeIds.has(edge.from) && allowedNodeIds.has(edge.to)) {
-      filteredEdges.push(edge);
+  for (const fromNodeId of allowedNodeIds) {
+    for (const edge of index.edgesByFrom.get(fromNodeId) || []) {
+      if (allowedNodeIds.has(edge.to)) filteredEdges.push(edge);
     }
   }
 
@@ -143,6 +137,40 @@ export function filterGraphByCorridor(
     nodes: filteredNodes,
     edges: filteredEdges,
   };
+}
+
+function getCorridorIndex(graph, resolution, h3) {
+  let byResolution = corridorIndexCache.get(graph);
+  if (!byResolution) {
+    byResolution = new Map();
+    corridorIndexCache.set(graph, byResolution);
+  }
+  if (byResolution.has(resolution)) return byResolution.get(resolution);
+
+  const nodesById = new Map();
+  const nodeIdsByCell = new Map();
+  const edgesByFrom = new Map();
+
+  for (const node of graph.nodes) {
+    nodesById.set(node.id, node);
+    node._h3Cells = node._h3Cells || {};
+    let cell = node._h3Cells[resolution];
+    if (!cell) {
+      cell = h3.latLngToCell(Number(node.latitude), Number(node.longitude), resolution);
+      node._h3Cells[resolution] = cell;
+    }
+    if (!nodeIdsByCell.has(cell)) nodeIdsByCell.set(cell, []);
+    nodeIdsByCell.get(cell).push(node.id);
+  }
+
+  for (const edge of graph.edges) {
+    if (!edgesByFrom.has(edge.from)) edgesByFrom.set(edge.from, []);
+    edgesByFrom.get(edge.from).push(edge);
+  }
+
+  const index = { nodesById, nodeIdsByCell, edgesByFrom };
+  byResolution.set(resolution, index);
+  return index;
 }
 
 export function getHexagonBoundaries(h3Cells, h3 = getH3()) {

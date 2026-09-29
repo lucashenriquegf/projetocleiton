@@ -169,7 +169,7 @@ export function findNearestEdge(routingGraph, latitude, longitude) {
 
 export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}) {
   const baseRoutingGraph = buildRoutingGraph(graph, { fallbackSpeedKph });
-  const augmentedNodes = graph.nodes.map((node) => ({ ...node }));
+  const augmentedNodes = [...graph.nodes];
   const augmentedEdges = [];
   const attachmentsByEdge = new Map();
 
@@ -231,14 +231,9 @@ export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}
     if (!attachmentsByEdge.has(edgeIndex)) {
       const baseEdge = baseEdgesByIndex.get(edgeIndex);
       if (baseEdge) {
-        augmentedEdges.push({
-          ...edge,
-          distance_m: baseEdge.distance,
-          speed_kph: baseEdge.speedKph,
-          travel_time_s: baseEdge.travelTimeSeconds,
-        });
+        augmentedEdges.push(edge);
       } else {
-        augmentedEdges.push({ ...edge });
+        augmentedEdges.push(edge);
       }
     }
   });
@@ -279,7 +274,11 @@ export function connectStopsToGraph(graph, stops, { fallbackSpeedKph = 40 } = {}
 
 export function prioritizeStopOrder(
   stops,
-  { departureTimeMs = Date.now(), averageSpeedKph = 40 } = {},
+  {
+    departureTimeMs = Date.now(),
+    averageSpeedKph = 40,
+    travelTimeMatrix = null,
+  } = {},
 ) {
   const pickups = stops.filter((stop) => stop.type === "pickup");
   const deliveries = stops.filter((stop) => stop.type === "delivery");
@@ -295,8 +294,8 @@ export function prioritizeStopOrder(
 
   while (remainingPickups.length) {
     remainingPickups.sort((first, second) =>
-      estimatedTravelTimeSeconds(first, anchor, averageSpeedKph) -
-      estimatedTravelTimeSeconds(second, anchor, averageSpeedKph),
+      travelTimeBetweenStops(first, anchor, { travelTimeMatrix, averageSpeedKph }) -
+      travelTimeBetweenStops(second, anchor, { travelTimeMatrix, averageSpeedKph }),
     );
     const nearest = remainingPickups.shift();
     reversePickupOrder.push(nearest);
@@ -307,12 +306,21 @@ export function prioritizeStopOrder(
   const deliveryOrder = [];
   const remainingDeliveries = [...deliveries];
   let current = pickupOrder.at(-1);
-  let elapsedSeconds = estimatedSequenceTime(pickupOrder, averageSpeedKph);
+  let elapsedSeconds = estimatedSequenceTime(pickupOrder, {
+    averageSpeedKph,
+    travelTimeMatrix,
+  });
 
   while (remainingDeliveries.length) {
     remainingDeliveries.sort((first, second) => {
-      const firstTravel = estimatedTravelTimeSeconds(current, first, averageSpeedKph);
-      const secondTravel = estimatedTravelTimeSeconds(current, second, averageSpeedKph);
+      const firstTravel = travelTimeBetweenStops(current, first, {
+        travelTimeMatrix,
+        averageSpeedKph,
+      });
+      const secondTravel = travelTimeBetweenStops(current, second, {
+        travelTimeMatrix,
+        averageSpeedKph,
+      });
       const firstSlack = deadlineTimestamp(first) -
         (departureTimeMs + (elapsedSeconds + firstTravel) * 1000);
       const secondSlack = deadlineTimestamp(second) -
@@ -322,7 +330,10 @@ export function prioritizeStopOrder(
     });
 
     const next = remainingDeliveries.shift();
-    elapsedSeconds += estimatedTravelTimeSeconds(current, next, averageSpeedKph);
+    elapsedSeconds += travelTimeBetweenStops(current, next, {
+      travelTimeMatrix,
+      averageSpeedKph,
+    });
     deliveryOrder.push(next);
     current = next;
   }
@@ -398,7 +409,13 @@ export function assembleMultiStopRoute(stops, pathResults) {
     travelTimeSeconds += result.travelTimeSeconds;
   }
 
-  return { segments, nodeIds, coordinates, distanceMeters, travelTimeSeconds };
+  return {
+    segments,
+    nodeIds,
+    coordinates,
+    distanceMeters,
+    travelTimeSeconds,
+  };
 }
 
 export function findStopsOnPath(nodeIds, remainingStops, allowedType) {
@@ -413,16 +430,223 @@ export function findStopsOnPath(nodeIds, remainingStops, allowedType) {
     );
 }
 
-function estimatedSequenceTime(stops, averageSpeedKph) {
+function estimatedSequenceTime(
+  stops,
+  { averageSpeedKph = 40, travelTimeMatrix = null } = {},
+) {
   let elapsedSeconds = 0;
   for (let index = 1; index < stops.length; index += 1) {
-    elapsedSeconds += estimatedTravelTimeSeconds(
+    elapsedSeconds += travelTimeBetweenStops(
       stops[index - 1],
       stops[index],
-      averageSpeedKph,
+      { averageSpeedKph, travelTimeMatrix },
     );
   }
   return elapsedSeconds;
+}
+
+export function travelTimeBetweenStops(
+  from,
+  to,
+  { travelTimeMatrix = null, averageSpeedKph = 40 } = {},
+) {
+  if (!from || !to) return Number.POSITIVE_INFINITY;
+  if (from.id === to.id || (from.nodeId && from.nodeId === to.nodeId)) return 0;
+
+  const row = travelTimeMatrix?.get?.(from.nodeId);
+  const matrixValue = row?.get?.(to.nodeId);
+  if (Number.isFinite(matrixValue) && matrixValue >= 0) return matrixValue;
+
+  return estimatedTravelTimeSeconds(from, to, averageSpeedKph);
+}
+
+export function evaluateStopSequence(
+  stops,
+  {
+    departureTimeMs = Date.now(),
+    averageSpeedKph = 40,
+    travelTimeMatrix = null,
+    returnToStart = false,
+  } = {},
+) {
+  if (!stops.length) {
+    return {
+      lateCount: 0,
+      totalLatenessSeconds: 0,
+      minSlackSeconds: Number.POSITIVE_INFINITY,
+      travelTimeSeconds: 0,
+    };
+  }
+
+  let elapsedSeconds = 0;
+  let travelTimeSeconds = 0;
+  let lateCount = 0;
+  let totalLatenessSeconds = 0;
+  let minSlackSeconds = Number.POSITIVE_INFINITY;
+
+  if (stops[0].type === "delivery") {
+    const slack = (deadlineTimestamp(stops[0]) - departureTimeMs) / 1000 - elapsedSeconds;
+    minSlackSeconds = Math.min(minSlackSeconds, slack);
+    if (slack < 0) {
+      lateCount += 1;
+      totalLatenessSeconds += -slack;
+    }
+  }
+
+  for (let index = 1; index < stops.length; index += 1) {
+    const from = stops[index - 1];
+    const to = stops[index];
+    const travel = travelTimeBetweenStops(from, to, {
+      travelTimeMatrix,
+      averageSpeedKph,
+    });
+    travelTimeSeconds += travel;
+    elapsedSeconds += travel;
+
+    if (to.type === "delivery") {
+      const slack = (deadlineTimestamp(to) - departureTimeMs) / 1000 - elapsedSeconds;
+      minSlackSeconds = Math.min(minSlackSeconds, slack);
+      if (slack < 0) {
+        lateCount += 1;
+        totalLatenessSeconds += -slack;
+      }
+    }
+  }
+
+  if (returnToStart && stops.length > 1) {
+    const returnTravel = travelTimeBetweenStops(stops.at(-1), stops[0], {
+      travelTimeMatrix,
+      averageSpeedKph,
+    });
+    travelTimeSeconds += returnTravel;
+    elapsedSeconds += returnTravel;
+  }
+
+  return {
+    lateCount,
+    totalLatenessSeconds,
+    minSlackSeconds,
+    travelTimeSeconds,
+  };
+}
+
+export async function buildStopTravelTimeMatrix(
+  routingGraph,
+  stops,
+  {
+    signal = null,
+    yieldControl = null,
+    yieldEvery = 4096,
+  } = {},
+) {
+  const uniqueNodeIds = [...new Set(stops.map((stop) => stop.nodeId).filter(Boolean))];
+  const targetNodeIds = new Set(uniqueNodeIds);
+  const matrix = new Map();
+
+  for (const sourceNodeId of uniqueNodeIds) {
+    throwIfRoutingCancelled(signal);
+    matrix.set(sourceNodeId, await shortestTravelTimesFrom(
+      routingGraph,
+      sourceNodeId,
+      targetNodeIds,
+      { signal, yieldControl, yieldEvery },
+    ));
+  }
+
+  return matrix;
+}
+
+async function shortestTravelTimesFrom(
+  routingGraph,
+  sourceNodeId,
+  targetNodeIds,
+  { signal, yieldControl, yieldEvery },
+) {
+  const distances = new Map([[sourceNodeId, 0]]);
+  const results = new Map([[sourceNodeId, 0]]);
+  const remainingTargets = new Set(targetNodeIds);
+  remainingTargets.delete(sourceNodeId);
+  const settled = new Set();
+  const queue = new TravelTimePriorityQueue();
+  queue.push({ nodeId: sourceNodeId, cost: 0 });
+  let expansions = 0;
+
+  while (queue.size && remainingTargets.size) {
+    throwIfRoutingCancelled(signal);
+    const current = queue.pop();
+    if (settled.has(current.nodeId) || current.cost !== distances.get(current.nodeId)) continue;
+    settled.add(current.nodeId);
+
+    if (remainingTargets.delete(current.nodeId)) {
+      results.set(current.nodeId, current.cost);
+    }
+
+    expansions += 1;
+    if (yieldControl && expansions % Math.max(1, Number(yieldEvery) || 1) === 0) {
+      await yieldControl();
+      throwIfRoutingCancelled(signal);
+    }
+
+    for (const edge of routingGraph.adjacency.get(current.nodeId) || []) {
+      const nextCost = current.cost + edge.travelTimeSeconds;
+      if (nextCost >= (distances.get(edge.to) ?? Number.POSITIVE_INFINITY)) continue;
+      distances.set(edge.to, nextCost);
+      queue.push({ nodeId: edge.to, cost: nextCost });
+    }
+  }
+
+  return results;
+}
+
+class TravelTimePriorityQueue {
+  constructor() {
+    this.items = [];
+  }
+
+  get size() {
+    return this.items.length;
+  }
+
+  push(item) {
+    this.items.push(item);
+    let index = this.items.length - 1;
+    while (index > 0) {
+      const parent = Math.floor((index - 1) / 2);
+      if (this.items[parent].cost <= item.cost) break;
+      this.items[index] = this.items[parent];
+      index = parent;
+    }
+    this.items[index] = item;
+  }
+
+  pop() {
+    const first = this.items[0];
+    const last = this.items.pop();
+    if (this.items.length && last) {
+      let index = 0;
+      while (true) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        if (left >= this.items.length) break;
+        let smallest = left;
+        if (right < this.items.length && this.items[right].cost < this.items[left].cost) {
+          smallest = right;
+        }
+        if (this.items[smallest].cost >= last.cost) break;
+        this.items[index] = this.items[smallest];
+        index = smallest;
+      }
+      this.items[index] = last;
+    }
+    return first;
+  }
+}
+
+function throwIfRoutingCancelled(signal) {
+  if (!signal?.aborted) return;
+  const error = new Error("Cálculo cancelado.");
+  error.name = "AbortError";
+  throw error;
 }
 
 function estimatedTravelTimeSeconds(from, to, averageSpeedKph) {

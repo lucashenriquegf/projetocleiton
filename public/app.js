@@ -1,5 +1,6 @@
 import {
   assembleMultiStopRoute,
+  buildStopTravelTimeMatrix,
   buildRoutingGraph,
   buildPathResult,
   connectStopsToGraph,
@@ -7,6 +8,7 @@ import {
   findStopsOnPath,
   prioritizeStopOrder,
 } from "/algorithms/routing.mjs";
+import { optimizeStopOrderIls } from "/algorithms/StopOrderILS.js";
 import {
   expandCorridor,
   filterGraphByCorridor,
@@ -48,13 +50,16 @@ const state = {
   counters: { pickup: 0, delivery: 0 },
   toastTimer: null,
   lastRoute: null,
-  editingDeliveryId: null,
+  editingStopId: null,
+  selectedMapId: null,
+  mapLoadController: null,
 };
 
 const SEARCH_BATCH_SIZE = 128;
 
 const elements = {
   cityName: document.querySelector("#city-name"),
+  mapSelect: document.querySelector("#road-network"),
   loadingState: document.querySelector("#loading-state"),
   stopCount: document.querySelector("#stop-count"),
   stopList: document.querySelector("#stop-list"),
@@ -66,6 +71,10 @@ const elements = {
   calculationNote: document.querySelector("#calculation-note"),
   algorithm: document.querySelector("#algorithm"),
   modelType: document.querySelector("#model-type"),
+  orderStrategy: document.querySelector("#order-strategy"),
+  orderBudget: document.querySelector("#order-budget"),
+  ilsControls: document.querySelector("#ils-controls"),
+  returnToStart: document.querySelector("#return-to-start"),
   averageSpeed: document.querySelector("#average-speed"),
   speedValue: document.querySelector("#speed-value"),
   h3Toggle: document.querySelector("#h3-toggle"),
@@ -77,6 +86,8 @@ const elements = {
   routeSummary: document.querySelector("#route-summary"),
   totalDistance: document.querySelector("#total-distance"),
   estimatedTime: document.querySelector("#estimated-time"),
+  planningTime: document.querySelector("#planning-time"),
+  searchTime: document.querySelector("#search-time"),
   pickupTotal: document.querySelector("#pickup-total"),
   deliveryTotal: document.querySelector("#delivery-total"),
   computationTime: document.querySelector("#computation-time"),
@@ -104,26 +115,120 @@ async function initialize() {
   bindInterfaceEvents();
 
   try {
-    const response = await fetch("/api/grafo");
-    if (!response.ok) throw new Error("Não foi possível carregar a rede viária.");
-
-    state.graph = await response.json();
-    state.routingGraph = buildRoutingGraph(state.graph, {
-      fallbackSpeedKph: Number(elements.averageSpeed.value),
-    });
-    elements.cityName.textContent = state.graph.city.replace(", Brazil", "");
-
-    const bounds = L.latLngBounds(
-      state.graph.nodes.map((node) => [node.latitude, node.longitude]),
-    );
-    state.map.fitBounds(bounds, { padding: [28, 28] });
-    elements.loadingState.classList.add("hidden");
+    await loadMapCatalog();
   } catch (error) {
     console.error(error);
-    elements.loadingState.querySelector("span").textContent = "Erro ao carregar o mapa.";
-    elements.loadingState.querySelector(".loader")?.remove();
+    showMapLoadingError("Erro ao carregar o mapa.");
     showToast(error.message, true);
   }
+}
+
+async function loadMapCatalog() {
+  const response = await fetch("/api/maps");
+  if (!response.ok) throw new Error("Não foi possível listar as malhas viárias.");
+  const catalog = await response.json();
+  if (!Array.isArray(catalog.maps) || catalog.maps.length === 0) {
+    throw new Error("Nenhuma malha viária foi encontrada na pasta maps.");
+  }
+
+  elements.mapSelect.innerHTML = "";
+  catalog.maps.forEach((map) => {
+    const option = document.createElement("option");
+    option.value = map.id;
+    option.textContent = map.label;
+    option.title = `${map.label} — ${formatFileSize(map.sizeBytes)}`;
+    elements.mapSelect.appendChild(option);
+  });
+
+  let storedMapId = null;
+  try {
+    storedMapId = localStorage.getItem("routing.selectedMapId");
+  } catch {
+    // O seletor continua funcionando mesmo quando o armazenamento local está indisponível.
+  }
+  const initialMapId = catalog.maps.some((map) => map.id === storedMapId)
+    ? storedMapId
+    : catalog.defaultMapId || catalog.maps[0].id;
+  elements.mapSelect.value = initialMapId;
+  await loadRoadNetwork(initialMapId, { initial: true });
+}
+
+async function loadRoadNetwork(mapId, { initial = false } = {}) {
+  if (!mapId || state.currentCalculationController) return;
+  state.mapLoadController?.abort();
+  const controller = new AbortController();
+  state.mapLoadController = controller;
+  const previousMapId = state.selectedMapId;
+  elements.mapSelect.disabled = true;
+  elements.loadingState.classList.remove("hidden");
+  const loader = elements.loadingState.querySelector(".loader");
+  if (loader) loader.hidden = false;
+  elements.loadingState.querySelector("span").textContent = "Carregando malha viária…";
+
+  try {
+    const response = await fetch(`/api/grafo?map=${encodeURIComponent(mapId)}`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || "Não foi possível carregar a rede viária.");
+    }
+    const graph = await response.json();
+    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+      throw new Error("A malha selecionada possui um formato inválido.");
+    }
+
+    if (!initial || state.stops.length) resetStopsForMapChange();
+    state.networkLayer?.remove();
+    state.networkLayer = null;
+    state.graph = graph;
+    state.routingGraph = buildRoutingGraph(graph, {
+      fallbackSpeedKph: Number(elements.averageSpeed.value),
+    });
+    state.selectedMapId = mapId;
+    elements.mapSelect.value = mapId;
+    elements.cityName.textContent = (graph.city || elements.mapSelect.selectedOptions[0]?.textContent || mapId)
+      .replace(/,?\s*Brazil$/i, "");
+
+    const bounds = L.latLngBounds();
+    graph.nodes.forEach((node) => bounds.extend([node.latitude, node.longitude]));
+    if (bounds.isValid()) state.map.fitBounds(bounds, { padding: [28, 28] });
+    if (elements.networkToggle.checked) toggleNetworkLayer();
+    try {
+      localStorage.setItem("routing.selectedMapId", mapId);
+    } catch {
+      // Persistência é apenas uma conveniência.
+    }
+  } catch (error) {
+    if (error.name === "AbortError") return;
+    elements.mapSelect.value = previousMapId || mapId;
+    if (!state.graph) {
+      showMapLoadingError("Erro ao carregar a malha viária.");
+    }
+    showToast(error.message, true);
+    throw error;
+  } finally {
+    if (state.mapLoadController === controller) {
+      state.mapLoadController = null;
+      elements.mapSelect.disabled = Boolean(state.currentCalculationController);
+      if (state.graph) elements.loadingState.classList.add("hidden");
+    }
+  }
+}
+
+function showMapLoadingError(message) {
+  const loader = elements.loadingState.querySelector(".loader");
+  if (loader) loader.hidden = true;
+  elements.loadingState.querySelector("span").textContent = message;
+}
+
+function resetStopsForMapChange() {
+  state.stops.forEach((stop) => stop.marker.remove());
+  state.stops = [];
+  state.counters = { pickup: 0, delivery: 0 };
+  setAddMode(null);
+  invalidateRoute();
+  renderStops();
 }
 
 function initializeMap() {
@@ -137,7 +242,6 @@ function initializeMap() {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   }).addTo(state.map);
 
-  L.control.zoom({ position: "topleft" }).addTo(state.map);
   state.map.on("click", (event) => {
     if (!state.addMode || !state.routingGraph) return;
     addStop(state.addMode, event.latlng);
@@ -184,11 +288,20 @@ function bindInterfaceEvents() {
   });
 
   elements.cancelAdd.addEventListener("click", () => setAddMode(null));
+  elements.mapSelect.addEventListener("change", () => {
+    loadRoadNetwork(elements.mapSelect.value).catch((error) => console.error(error));
+  });
   elements.clearRoute.addEventListener("click", clearAllStops);
   elements.calculateRoute.addEventListener("click", calculateRoute);
   elements.cancelCalculation.addEventListener("click", cancelCalculation);
   elements.algorithm.addEventListener("change", invalidateRoute);
   elements.modelType.addEventListener("change", invalidateRoute);
+  elements.orderStrategy.addEventListener("change", () => {
+    elements.ilsControls.hidden = elements.orderStrategy.value !== "ils";
+    invalidateRoute();
+  });
+  elements.orderBudget.addEventListener("change", invalidateRoute);
+  elements.returnToStart.addEventListener("change", invalidateRoute);
   elements.averageSpeed.addEventListener("input", () => {
     elements.speedValue.textContent = elements.averageSpeed.value;
     invalidateRoute();
@@ -223,7 +336,7 @@ function bindInterfaceEvents() {
   elements.closeDeliveryDialog.addEventListener("click", closeDeliveryEditor);
   elements.cancelDelivery.addEventListener("click", closeDeliveryEditor);
   elements.deliveryDialog.addEventListener("close", () => {
-    state.editingDeliveryId = null;
+    state.editingStopId = null;
   });
 }
 
@@ -384,7 +497,7 @@ function renderStops() {
       <span class="stop-sequence">${index + 1}</span>
       <span class="stop-copy"><strong>${escapeHtml(stop.name)}</strong><small class="${configured ? "" : "pending-details"}">${escapeHtml(stopDetails)}</small></span>
       <span class="stop-actions">
-        ${stop.type === "delivery" ? `<button class="edit-delivery" type="button" aria-label="Editar ${escapeHtml(stop.name)}">Prazo</button>` : ""}
+        ${stop.type === "delivery" ? `<button class="edit-delivery" type="button" aria-label="Editar ${escapeHtml(stop.name)}">Editar</button>` : ""}
         <button class="remove-stop" type="button" aria-label="Remover ${escapeHtml(stop.name)}">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
         </button>
@@ -412,10 +525,10 @@ function getCalculationNote(pickups, deliveries, incompleteDeliveries = 0) {
 }
 
 function openDeliveryEditor(stopId) {
-  const stop = state.stops.find((candidate) => candidate.id === stopId && candidate.type === "delivery");
-  if (!stop) return;
+  const stop = state.stops.find((candidate) => candidate.id === stopId);
+  if (!stop || stop.type !== "delivery") return;
 
-  state.editingDeliveryId = stop.id;
+  state.editingStopId = stop.id;
   elements.deliveryDialogTitle.textContent = stop.name;
   const remaining = getRemainingDeadlineParts(stop.deadline);
   elements.deadlineDays.value = remaining.days;
@@ -426,12 +539,12 @@ function openDeliveryEditor(stopId) {
 
 function closeDeliveryEditor() {
   if (elements.deliveryDialog.open) elements.deliveryDialog.close();
-  state.editingDeliveryId = null;
+  state.editingStopId = null;
 }
 
 function saveDeliveryDeadline(event) {
   event.preventDefault();
-  const stop = state.stops.find((candidate) => candidate.id === state.editingDeliveryId);
+  const stop = state.stops.find((candidate) => candidate.id === state.editingStopId);
   if (!stop) return;
 
   const days = Number(elements.deadlineDays.value);
@@ -445,7 +558,6 @@ function saveDeliveryDeadline(event) {
     showToast("Informe um prazo maior que zero.", true);
     return;
   }
-
   stop.deadline = new Date(Date.now() + totalMinutes * 60_000).toISOString();
   stop.marker.setPopupContent(createPopupContent(stop));
   invalidateRoute();
@@ -522,7 +634,11 @@ async function calculateRoute() {
   elements.cancelCalculation.textContent = "Cancelar";
   elements.algorithm.disabled = true;
   elements.modelType.disabled = true;
+  elements.orderStrategy.disabled = true;
+  elements.orderBudget.disabled = true;
+  elements.returnToStart.disabled = true;
   elements.averageSpeed.disabled = true;
+  elements.mapSelect.disabled = true;
   elements.clearRoute.disabled = true;
   await new Promise((resolve) => requestAnimationFrame(resolve));
 
@@ -532,8 +648,12 @@ async function calculateRoute() {
   const departureTimeMs = Date.now();
   let result;
   let plannedStops;
+  let planningTimeMs = 0;
+  let searchTimeMs = 0;
+  let orderInfo = null;
 
   try {
+    const planningStartedAt = performance.now();
     const connected = connectStopsToGraph(state.graph, state.stops, {
       fallbackSpeedKph: Number(elements.averageSpeed.value),
     });
@@ -542,10 +662,39 @@ async function calculateRoute() {
       fallbackSpeedKph: Number(elements.averageSpeed.value),
     });
     setExplorationVisibility(true);
-    plannedStops = prioritizeStopOrder(connected.stops, {
+    const travelTimeMatrix = await buildStopTravelTimeMatrix(
+      calculationRoutingGraph,
+      connected.stops,
+      {
+        signal: calculationController.signal,
+        yieldControl: () => yieldExplorationBatch(calculationController.signal),
+      },
+    );
+    const priorityStops = prioritizeStopOrder(connected.stops, {
       departureTimeMs,
       averageSpeedKph: Number(elements.averageSpeed.value),
+      travelTimeMatrix,
     });
+    plannedStops = priorityStops;
+    orderInfo = { strategy: "priority", iterations: 0, evaluations: 0, candidateCount: 1 };
+    if (elements.orderStrategy.value === "ils") {
+      const optimized = await optimizeStopOrderIls({
+        stops: connected.stops,
+        initialOrder: priorityStops,
+        departureTimeMs,
+        averageSpeedKph: Number(elements.averageSpeed.value),
+        travelTimeMatrix,
+        returnToStart: elements.returnToStart.checked,
+        budgetMs: Number(elements.orderBudget.value),
+        signal: calculationController.signal,
+        yieldControl: () => yieldExplorationBatch(calculationController.signal),
+      });
+      plannedStops = optimized.stops;
+      orderInfo = { strategy: "ils", ...optimized };
+      delete orderInfo.stops;
+    }
+    planningTimeMs = performance.now() - planningStartedAt;
+    const searchStartedAt = performance.now();
     const calculatedRoute = await calculateSelectedAlgorithmRoute(
       algorithm,
       modelType,
@@ -553,7 +702,9 @@ async function calculateRoute() {
       calculationGraph,
       calculationRoutingGraph,
       calculationController.signal,
+      elements.returnToStart.checked,
     );
+    searchTimeMs = performance.now() - searchStartedAt;
     plannedStops = calculatedRoute.stops;
     result = calculatedRoute.result;
   } catch (error) {
@@ -575,7 +726,11 @@ async function calculateRoute() {
   elements.cancelCalculation.textContent = "Cancelar";
   elements.algorithm.disabled = false;
   elements.modelType.disabled = false;
+  elements.orderStrategy.disabled = false;
+  elements.orderBudget.disabled = false;
+  elements.returnToStart.disabled = false;
   elements.averageSpeed.disabled = false;
+  elements.mapSelect.disabled = false;
   elements.clearRoute.disabled = state.stops.length === 0;
   finishExploration();
 
@@ -597,11 +752,18 @@ async function calculateRoute() {
     algorithm,
     modelType,
     departureTimeMs,
+    planningTimeMs,
+    searchTimeMs,
+    orderInfo,
+    returnToStart: elements.returnToStart.checked,
     pickupCount: pickups.length,
     deliveryCount: deliveries.length,
   };
   const stopById = new Map(state.stops.map((stop) => [stop.id, stop]));
-  state.stops = plannedStops.map((stop) => stopById.get(stop.id));
+  state.stops = plannedStops
+    .filter((stop) => stop.type !== "return")
+    .map((stop) => stopById.get(stop.id))
+    .filter(Boolean);
   renderStops();
   drawRoute(state.lastRoute);
   renderRouteSummary(state.lastRoute);
@@ -765,13 +927,17 @@ async function calculateSelectedAlgorithmRoute(
   graph,
   routingGraph,
   signal,
+  returnToStart = false,
 ) {
   if (stops.length < 2) {
     return { stops: [...stops], result: assembleMultiStopRoute(stops, []) };
   }
 
-  const orderedStops = [stops[0]];
-  const remainingStops = stops.slice(1);
+  const routeStops = returnToStart && stops.length > 1
+    ? [...stops, createReturnStop(stops[0])]
+    : stops;
+  const orderedStops = [routeStops[0]];
+  const remainingStops = routeStops.slice(1);
   const pathResults = [];
   const allCorridorCells = new Set();
   let maxExpandedBufferLevel = 0;
@@ -818,8 +984,8 @@ async function calculateSelectedAlgorithmRoute(
             fallbackSpeedKph: Number(elements.averageSpeed.value),
           });
 
+          allowedCells.forEach((c) => allCorridorCells.add(c));
           if (state.h3ShowPolygons) {
-            allowedCells.forEach((c) => allCorridorCells.add(c));
             drawCorridorHexagons(allCorridorCells);
           }
 
@@ -912,8 +1078,18 @@ async function calculateSelectedAlgorithmRoute(
   }
 
   return {
-    stops: orderedStops,
+    stops: orderedStops.filter((stop) => stop.type !== "return"),
     result: multiStopResult,
+  };
+}
+
+function createReturnStop(firstStop) {
+  return {
+    ...firstStop,
+    id: `return:${firstStop.id}`,
+    type: "return",
+    name: `${firstStop.name} (retorno)`,
+    deadline: null,
   };
 }
 
@@ -932,10 +1108,13 @@ function drawRoute(result) {
 function renderRouteSummary(result, scrollToSummary = true) {
   elements.totalDistance.textContent = formatDistance(result.distanceMeters);
   elements.estimatedTime.textContent = formatDuration(result.travelTimeSeconds);
+  elements.planningTime.textContent = formatComputationTime(result.planningTimeMs || 0);
+  elements.searchTime.textContent = formatComputationTime(result.searchTimeMs || 0);
   elements.pickupTotal.textContent = result.pickupCount;
   elements.deliveryTotal.textContent = result.deliveryCount;
   elements.computationTime.textContent = formatComputationTime(result.computationTimeMs);
-  elements.selectedAlgorithm.textContent = `${getAlgorithmLabel(result.algorithm)} · ${result.modelType === "bidirectional" ? "Bidirecional" : "Normal"}`;
+  const orderLabel = result.orderInfo?.strategy === "ils" ? "ILS" : "Prioridade";
+  elements.selectedAlgorithm.textContent = `${getAlgorithmLabel(result.algorithm)} · ${result.modelType === "bidirectional" ? "Bidirecional" : "Normal"} · ${orderLabel}`;
   if (elements.h3Metric) {
     elements.h3Metric.textContent = result.h3Info
       ? `Nível ${result.h3Info.bufferK} (${result.h3Info.cellCount} hex)`
@@ -947,9 +1126,10 @@ function renderRouteSummary(result, scrollToSummary = true) {
     const mainRoad = segment.roads[0] || "Vias locais";
     let deliveryDetails = "";
     if (segment.to.type === "delivery") {
-      const estimatedArrival = result.departureTimeMs + cumulativeTimeSeconds * 1000;
-      const isLate = estimatedArrival > Date.parse(segment.to.deadline);
-      deliveryDetails = `<small class="deadline-detail ${isLate ? "late" : ""}">Chegada ${escapeHtml(formatTime(estimatedArrival))} · prazo ${escapeHtml(formatDeadline(segment.to.deadline))}${isLate ? " · atraso estimado" : ""}</small>`;
+      const estimatedCompletion = result.departureTimeMs + cumulativeTimeSeconds * 1000;
+      const slackSeconds = (Date.parse(segment.to.deadline) - estimatedCompletion) / 1000;
+      const isLate = slackSeconds < 0;
+      deliveryDetails = `<small class="deadline-detail ${isLate ? "late" : ""}">Chegada ${escapeHtml(formatTime(estimatedCompletion))} · prazo ${escapeHtml(formatDeadline(segment.to.deadline))} · ${isLate ? `atraso ${escapeHtml(formatDuration(-slackSeconds))}` : `folga ${escapeHtml(formatDuration(slackSeconds))}`}</small>`;
     }
     return `<div class="segment-row">
       <span class="segment-number">${index + 1}</span>
@@ -1127,8 +1307,14 @@ function formatDistance(meters) {
   return `${(meters / 1000).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 }
 
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes < 1024) return `${bytes || 0} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KiB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MiB`;
+}
+
 function formatDuration(seconds) {
-  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  const totalMinutes = Math.max(0, Math.round(seconds / 60));
   if (totalMinutes < 60) return `${totalMinutes} min`;
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;

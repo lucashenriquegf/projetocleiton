@@ -1,0 +1,2184 @@
+===== PAGE 1 =====
+Knowledge transfer Q-learning for vessel route planning using 
+automatic identification system-derived expert trajectories
+Hyunju Lee
+a , †
+, Kikun Park
+b , †
+, Hyerim Bae
+c , *
+a
+Korean Register, South Korea
+b
+Safe & Clean Supply Chain (SCSC) Research Center, Pusan National University, South Korea
+c
+Department of Data Science, Graduate School of Data Science, Pusan National University, South Korea
+ARTICLE INFO
+Keywords:
+Reinforcement learning
+Vessel trajectory planning
+Knowledge transfer
+Automatic identification system
+Maritime navigation optimization
+ABSTRACT
+Traditional route recommendation systems optimize navigation paths using environmental var -
+iables such as weather and sea conditions, but often fail to account for real-world factors 
+encountered by mariners. To address this gap, this study proposes a knowledge transfer Q- 
+learning (KT-QL) algorithm, a reinforcement learning method built upon the Q-learning frame -
+work. The proposed KT-QL algorithm integrates expert trajectory knowledge derived from 
+Automatic Identification System data into the Q-learning process, enabling the agent to combine 
+trial-and-error exploration with data-driven guidance. Experimental results show that KT-QL 
+reduces Hausdorff distances by approximately 39 % compared with conventional reinforce -
+ment learning and traditional search methods, and enhances fuel consumption prediction accu -
+racy by approximately 2 %. These findings highlight the potential of KT-QL to enhance maritime 
+operational efficiency, safety, and environmental sustainability.
+1. Introduction
+Maritime transportation is pivotal to global trade, making the selection of efficient vessel routes a critical task. Optimizing these 
+routes can significantly enhance economic, environmental, and safety outcomes by reducing fuel consumption, shortening voyage 
+times, and lowering the risk of maritime accidents ( Lin et al., 2013 ). The International Maritime Organization (IMO) estimates that 
+voyage and speed optimization can reduce greenhouse gas (GHG) emissions by 1 – 10 % and up to 75 %, respectively ( IMO, 2025 ).
+As global demand for decarbonization and environmentally friendly operations gains momentum, the need for such operational 
+efficiencies has become even more urgent. In response, major stakeholders, including the IMO and the European Union, have 
+implemented stringent regulations to reduce carbon emissions from the shipping industry. Nevertheless, uncertainties surrounding 
+large-scale technological investments and guaranteed reduction outcomes have led many shipping companies to prioritize operational 
+measures that yield immediate results. Among these, optimized vessel route planning is a widely adopted method because it can 
+quickly decrease fuel use and ensure regulatory compliance. In practice, route planning must also account for real-world navigational 
+factors such as traffic corridors and stable routes frequently used by other vessels ( Sharif et al., 2024 ).
+Although various commercial machine-learning (ML) systems have emerged, proposing efficient routes by incorporating envi -
+ronmental variables such as weather, waves, and currents ( Sharif et al., 2024 ). Despite their utility, these approaches often fail to 
+* Corresponding author.
+E-mail addresses: leehj@krs.co.kr (H. Lee), kikunpark@pusan.ac.kr (K. Park), hrbae@pusan.ac.kr (H. Bae). 
+†
+These authors contributed equally to this work.
+Contents lists available at ScienceDirect
+Maritime Transport Research
+journal homep age: www.sci encedirect. com/journa l/maritime-tra nsport-rese arch
+https://doi.org/10.1016/j.martra.2025.100142
+Received 18 August 2025; Received in revised form 14 November 2025; Accepted 24 November 2025  
+Maritime Transport Research 9 (2025) 100142 
+Available online 4 December 2025 
+2666-822X/© 2025 The Authors. Published by Elsevier Ltd. This is an open access article under the CC BY license 
+( http://creativecommons.org/licenses/by/4.0/ ). 
+
+===== PAGE 2 =====
+reflect dynamic external factors encountered by mariners, including regulatory changes, piracy threats, or localized environmental 
+disturbances. Consequently, mariners often distrust these recommendations and instead continue to rely on their own experience and 
+intuition ( Atos, 2024 ).
+Reinforcement learning (RL) has emerged as a promising approach for vessel trajectory planning because it can learn navigation 
+policies through trial-and-error interactions with the environment. Nevertheless, its direct application in the maritime domain remains 
+challenging. Automatic Identification System (AIS) data are often sparse and unevenly distributed; reward design and hyperparameter 
+choices strongly affect learning stability; and agents may generate impractical detours when prior navigational knowledge is absent. 
+These limitations highlight the need for methods that retain the adaptability of RL while embedding expert-derived priors to ensure 
+both convergence stability and operational realism.
+To overcome these limitations, this study proposes a knowledge transfer Q-learning (KT-QL) approach that combines the strengths 
+of experience-based imitation learning (behavioral cloning, BC) and trial-and-error-based Q-learning, which is one of the most widely 
+used RL methods. The KT-QL algorithm uses expert vessel trajectories from AIS data to initialize the agent’s policy, leveraging BC’s 
+rapid convergence. Simultaneously, it enhances the generalization capabilities of Q-learning by enabling autonomous exploration of 
+the environment. This hybrid structure is designed to mitigate the known limitations of both methods: the compounding errors and 
+generalization limits of BC, and the slow, unstable convergence of conventional Q-learning. By balancing exploration and exploitation, 
+the proposed algorithm can derive realistic vessel routes that enhance operational efficiency, environmental sustainability, and 
+navigational safety.
+To overcome these limitations, this study introduces a KT-QL approach that integrates expert vessel trajectories from AIS data into 
+the Q-learning framework. By leveraging BC for rapid policy initialization and Q-learning for autonomous exploration, KT-QL balances 
+the strengths of both methods. This hybrid structure mitigates the compounding errors and limited generalization of BC, as well as the 
+slow convergence of standard Q-learning, enabling the derivation of realistic and energy-efficient vessel routes.
+The remainder of this paper is organized as follows: Section 2 reviews related studies on AIS data, vessel route planning, and RL 
+methods. Section 3 details the architecture and algorithms of the proposed KT-QL approach. Section 4 presents the results and dis -
+cusses them in detail. Finally, Section 5 concludes the study and discusses directions for future research.
+2. Literature review
+This section introduces AIS data, reviews existing research on vessel route planning and prediction models, and examines the 
+concept of knowledge transfer (KT) in RL.
+2.1. AIS data
+Historical vessel navigation data are essential for this study, and information collected from the AIS serves as a critical resource for 
+Glossary
+AIS Automatic Identification System
+BC Behavioral cloning
+DL Deep-learning
+DS Density score
+IMO International Maritime Organization
+LSTM Long short-term memory
+ML Machine-learning
+MMSI Maritime Mobile Service Identity
+PSO Particle swarm optimization
+RL Reinforcement learning
+SFOC Specific fuel oil consumption
+DQN Deep Q-Networks
+DDQN Double DQN
+PPO Proximal Policy Optimization
+ETA Estimated time of arrival
+MCR Maximum continuous rating
+RMSE Root Mean Square Error
+MAPE Mean Absolute Percentage Error
+GA Genetic algorithms
+GHG Reduce greenhouse gas
+KT Knowledge transfer
+KT-QL Knowledge transfer Q-learning
+GCRL Goal-conditioned RL
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+2 
+
+===== PAGE 3 =====
+maritime transport research ( Yan et al., 2021 ). By leveraging AIS data, key navigational knowledge, including vessel-route charac -
+teristics from historical trajectories and the detection of anomalous behaviors, can be extracted, which can then be applied to optimize 
+vessel route planning ( Lei, 2020 ).
+AIS is an automated system that provides vessel position data. Initially developed in the 1990s to prevent collisions and track vessel 
+routes, its applications have expanded as data quality and completeness have improved. AIS data are typically classified into three 
+categories: dynamic, static, and voyage-related information, as detailed in Table 1 ( Shelmerdine, 2015 ).
+Because AIS data contain core navigational information, including vessel position, speed, and course, they have been widely used in 
+recent maritime traffic research for tasks such as vessel-route prediction, voyage planning, and collision avoidance to enhance nav -
+igation safety and operational efficiency ( Liu et al., 2020 ). These analytical tasks typically combine raw AIS data with statistical 
+methods or ML and deep-learning (DL) models ( Zhang et al., 2022 ). The key features listed in Table 1 serve as the core inputs for 
+modeling. AIS-based DL applications are further detailed in Section 2.2.
+2.2. Vessel trajectory planning approaches
+Vessel trajectory prediction is crucial for ensuring safe navigation, preventing collisions, and optimizing operational efficiency. 
+Over the years, various methodologies for this purpose have been developed and refined. These can be broadly categorized into four 
+groups: (1) model-based optimization methods, (2) probabilistic and statistical prediction models, (3) ML and DL methods, and 
+(4) RL frameworks.
+(1) Model-based optimization methods include nonlinear programming, graph search algorithms such as A* and Dijkstra, and 
+evolutionary algorithms such as genetic algorithms (GA) and particle swarm optimization (PSO) ( Djouani and Hamam, 1995 ; Alvarez 
+et al., 2004 ; Niu et al., 2018 ). These methods are computationally efficient in static environments but show limited adaptability when 
+dynamic conditions, such as changing weather or regulatory restrictions, must be considered. For instance, Alvarez et al. (2004)
+employed GA for obstacle-avoidance routing in restricted waters but reported limitations in handling environmental variability.
+(2) Statistical and probabilistic approaches aim to capture uncertainty in navigation dynamics. Kalman filter-based models are 
+effective for real-time location and speed correction, whereas Markov chain models predict future trajectories using state-transition 
+probabilities ( Perera et al., 2012 ; Qiao et al., 2015 ). Another common approach is similarity search, which predicts future routes 
+by analyzing past trajectory patterns ( Hexeberg et al., 2017 ). Although these methods perform well in short-term forecasting, their 
+excessive reliance on historical patterns often leads to poor generalizability when traffic or environmental distributions shift 
+significantly.
+(3) ML and DL methods have been applied to leverage the large-volume, time-series nature of AIS data. Classical supervised 
+learning methods, such as k-nearest neighbors, support vector machines, and artificial neural networks, have been applied to capture 
+nonlinear relationships between navigational features. Meanwhile, time-series neural networks such as long short-term memory 
+(LSTM) and Transformer models have demonstrated strong performance in capturing sequential patterns ( Zhang et al., 2021 ; Nguyen 
+and Fablet, 2024 ). Zhang et al. (2022) noted that LSTM-based models generally outperform traditional ML approaches and that 
+incorporating attention mechanisms and multistage prediction architectures can further enhance performance. Nevertheless, these 
+models may face challenges in generalizing to operational scenarios that are insufficiently represented in the training data, since they 
+rely solely on supervised learning from observed AIS trajectories.
+(4) RL frameworks have recently gained attention as they enable agents to learn navigation policies through trial-and-error 
+interaction with dynamic environments. RL has been applied to route planning, estimated time of arrival (ETA) prediction, and 
+fuel consumption optimization ( Chen et al., 2019 ; Guo et al., 2020 ; Moradi et al., 2022 ; Yoo and Kim, 2016 ; Sivaraj and Rajendran, 
+2022 ). While classical Q-learning is conceptually simple, it often requires extensive training and may generate unrealistic paths 
+without prior knowledge. To address these issues, recent studies have employed deep RL methods such as Deep Q-Networks (DQN), 
+Double DQN (DDQN), Deep Deterministic Policy Gradient, Proximal Policy Optimization (PPO), and Soft Actor-Critic. For example, 
+Chen et al. (2025) combined A* search with DDQN to reduce fuel consumption and emissions, although performance remained highly 
+sensitive to reward design. A recent preprint by Vaidheeswaran et al. (2025) introduced goal-conditioned RL (GCRL) with AIS-based 
+traffic graphs and PPO variants, which improved adaptability across multiple routes but still suffered from data sparsity and limited 
+Table 1 
+Description of AIS data components.
+Type Features Description
+Dynamic Position Latitude and longitude
+Speed Ship speed over ground ranging from 0 to 102 knots
+Direction Shipping course and heading of the ship
+Time stamp Precise UTC when the data packet was generated
+Navigation status Includes “at anchor,” “under way using engine(s),” and “not under command”
+Static Ship Identity Ship name, IMO number, vessel type, and call sign
+AIS identity Maritime Mobile Service Identity (MMSI)
+Size Length and width of the ship
+Voyage related Destination Destination port of the ship
+ETA Estimated time of arrival of the ship
+Draft Ship’s draft, ranging from 0.1 to 25.5 m
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+3 
+
+===== PAGE 4 =====
+generalization. In parallel, Latinopoulos et al. (2025) applied machine learning techniques, specifically XGBoost, to predict 
+vessel-specific performance and fuel consumption under emerging decarbonization constraints. Their findings highlight the impor -
+tance of incorporating vessel heterogeneity and regulatory conditions into voyage optimization. These studies suggest that while RL 
+provides a promising framework for maritime trajectory planning, its performance can be further improved by addressing challenges 
+related to reward sensitivity, hyperparameter tuning, data imbalance, and the explicit integration of vessel-specific performance 
+factors.
+In response to these challenges, this study proposes a KT-QL framework that enhances standard Q-learning by embedding expert- 
+derived knowledge from AIS data. This integration aims to mitigate structural limitations of conventional RL, particularly regarding 
+convergence efficiency and the ability to reflect realistic navigational practices. Table 2 summarizes representative vessel trajectory 
+planning methods by methodology, data type, application, and key limitations. This structured review highlights the gradual transition 
+from optimization and statistical models to ML/DL and RL frameworks, while underscoring persistent challenges in generalization, 
+convergence, and the incorporation of expert navigational knowledge.
+Table 2 
+Comparative summary of vessel trajectory planning and KT approaches.
+Category Study Method Data Application Limitation
+Model-based 
+optimization
+Djouani and Hamam 
+(1995)
+Nonlinear programming Simulated Routing optimization Limited to static environments
+Alvarez et al. (2004) GA Restricted 
+waters
+Obstacle-avoidance 
+routing
+Poor adaptability to real-time 
+changes
+Niu et al. (2018) PSO Simulated Voyage optimization Difficulty incorporating dynamic 
+variables
+Probabilistic and 
+statistical
+Perera et al. (2012) Kalman filter AIS Real-time location/ 
+speed correction
+Poor under current shifts/course 
+changes
+Qiao et al. (2015) Markov chain AIS Trajectory prediction Over-reliance on historical patterns
+Hexeberg et al. 
+(2017)
+Similarity-based inference AIS Trajectory forecasting Poor generalizability under 
+distribution shifts
+ML/DL Zhang et al. (2021) LSTM AIS Sequential trajectory 
+modeling
+Limited generalization
+Zhang et al. (2022) LSTM + Attention AIS Trajectory prediction Struggles with unseen scenarios; 
+lacks domain knowledge
+Nguyen and Fablet 
+(2024)
+Transformer AIS Trajectory prediction High data/computation demands
+RL Yoo and Kim (2016) RL Simulated Route optimization Limited scalability
+Chen et al. (2019) Q-learning Simulated Path planning Slow convergence
+Guo et al. (2020) RL framework AIS Maritime routing Hyperparameter sensitivity
+Moradi et al. (2022) RL (various) AIS Maritime ETA 
+prediction
+Policy instability
+Sivaraj and 
+Rajendran (2022)
+RL AIS Fuel optimization Reward sensitivity
+Chen et al. (2025) A* + DDQN (A-DDQN) AIS Voyage optimization Reward sensitivity; 
+constrained search dependency
+Latinopoulos et al. 
+(2025)
+Deep RL for 
+voyage and weather 
+routing
+AIS +
+weather
+Marine voyage 
+optimization and 
+weather routing
+High data demand; generalization 
+challenges
+Vaidheeswaran et al. 
+(2025)
+GCRL 
++ PPO
+AIS graph Multi-OD route 
+planning
+Data sparsity; limited generalization
+Knowledge 
+transfer
+Taylor and Stone 
+(2009)
+Transfer learning 
+(general)
+Various 
+(simulated)
+Policy reuse Negative transfer risk
+Lazaric (2012) Transfer learning (policy/ 
+value reuse)
+Simulated Accelerating 
+convergence in RL
+Requires structural similarity; 
+limited real-world validation
+Zhang et al. (2017) Actor – Mimic Simulated Cross-task transfer Simulation-heavy
+Teh et al. (2017) Distral multitask learning Simulated Shared policy learning Limited to controlled tasks
+Parisotto et al. 
+(2016)
+Experience-based transfer Simulated Reuse of past 
+trajectories to 
+accelerate 
+policy learning
+Risk of negative transfer if 
+environments differ
+Yin and Pan (2017) Successor features 
+/Experience-based 
+transfer
+Simulated Value function 
+reuse across tasks
+Requires task similarity; risk of 
+performance degradation
+Barreto et al. (2017) Successor features Simulated State-reward transfer Task similarity required
+Behavioral cloning Ly and Akhloufi 
+(2021)
+BC Real-world 
+demos
+Policy imitation Error accumulation
+Lee and Zhang 
+(2021)
+BC (supervised 
+imitation)
+Real-world 
+demos
+Autonomous driving, 
+energy systems
+Poor generalization; fixed policy
+Maritime KT-QL 
+positioning
+Park et al. (2021) RL on AIS data AIS ETA estimation Instability with AIS data
+This study (KT-QL) KT-QL AIS Vessel trajectory 
+planning
+Combines expert priors with RL to 
+address convergence and realism
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+4 
+
+===== PAGE 5 =====
+2.3. Knowledge transfer and imitation learning
+KT and imitation learning have been explored as complementary strategies to improve the efficiency and adaptability of RL. These 
+approaches can be broadly grouped into two categories: (1) transfer learning methods that reuse policies, features, or experiences 
+across tasks, and (2) BC methods that directly mimic expert demonstrations.
+(1) Transfer learning methods accelerate convergence and improve policy generalization by leveraging knowledge from related 
+tasks ( Taylor and Stone, 2009 ; Lazaric, 2012 ). Many studies on RL have explored policy-based KT, where a policy learned in one 
+environment is adapted to a new environment or a similar task. Bharadhwaj et al. (2019) proposed a sim-to-real transfer method 
+wherein a policy trained within a simulation is deployed in a real-world environment. Zhang et al. (2017) accelerated policy learning 
+by transferring state-reward structures using successor features. Teh et al. (2017) introduced a multitask learning framework (Distral) 
+that learns task-specific policies while sharing a common representation across tasks. Parisotto et al. (2016) employed the actor – mimic 
+architecture to demonstrate that a single policy can be effectively transferred to other tasks. Moreover, experience-based transfer 
+methods that efficiently reuse past learning have been studied ( Yin and Pan, 2017 ; Barreto et al., 2017 ). While these methods improve 
+sample efficiency, they are often developed in simulation environments and face challenges in real-world deployment, where negative 
+transfer may occur if the source and target tasks differ significantly.
+(2) BC is a form of imitation learning that uses supervised learning to directly mimic an expert ’ s decision-making process. By 
+training on expert demonstrations, BC can replicate complex policies and generate effective initial policies in real-world settings, such 
+as autonomous driving and energy control ( Ly and Akhloufi, 2021 ; Lee and Zhang, 2021 ). However, BC suffers from structural lim -
+itations. Its performance suffers in unfamiliar states if the expert data are not comprehensive. Additionally, the learned policy is fixed 
+and cannot adapt to changing environments. Early errors may also accumulate, leading to inefficient or unsafe behavior — a critical 
+issue for tasks such as vessel route planning.
+The proposed KT-QL method is designed to bridge the gaps between theoretical generalizability and practical applicability by 
+combining the strengths of both categories. Unlike BC, which directly replicates expert demonstrations and suffers from poor 
+adaptability in unfamiliar states, KT-QL leverages AIS-based expert trajectories only as an initialization step and subsequently refines 
+policies through reward-driven Q-learning. In contrast to conventional policy transfer methods that generally rely on simulations or 
+assume structural similarity across tasks, KT-QL directly embeds real-world AIS priors into the Q-learning framework, thereby 
+improving operational realism. This hybrid design mitigates BC ’ s compounding errors and the unstable convergence of RL, enabling 
+the derivation of vessel routes that are both computationally efficient and operationally viable. Moreover, it not only distinguishes KT- 
+QL from conventional imitation learning and policy transfer methods but also provides several practical advantages that enhance its 
+effectiveness for maritime trajectory planning, including the following:
+• It accelerates convergence by initializing the policy with expert trajectories, thereby reducing the number of training episodes 
+required.
+• It improves generalization to unseen maritime conditions by combining data-driven priors with adaptive RL.
+• It enhances operational realism and robustness by generating routes that reflect both empirical AIS traffic patterns and optimized 
+energy efficiency.
+Taken together, prior studies demonstrate a gradual evolution from optimization and statistical models to ML/DL, RL, and transfer- 
+based approaches. Despite these advances, challenges remain in convergence stability, reward sensitivity, and the integration of expert 
+navigational knowledge. Table 2 provides a consolidated comparison of representative methods across these categories, summarizing 
+Fig. 1. Architectural overview of the proposed KT-QL approach.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+5 
+
+===== PAGE 6 =====
+their methodological basis, data, applications, and limitations, and positioning the proposed KT-QL within this broader research 
+landscape. The detailed architecture and implementation of KT-QL are presented in the next section.
+3. Proposed approach
+3.1. Overview of proposed approach
+This section details the proposed vessel route planning method based on KT-QL. The core idea is to transfer expert navigation 
+knowledge derived from real-world AIS data to a Q-learning agent. This KT is intended to improve the convergence speed of policy 
+learning and enhance the agent ’ s ability to generate realistic vessel routes. As illustrated in Fig. 1 , the proposed method comprises the 
+following four main steps:
+Step 1: Environment setting 
+• The RL environment is constructed based on vessel position data from AIS.
+• This involves defining the agent ’ s state, action, and reward structure, including a reward and penalty function that reflects actual 
+navigational constraints.
+Step 2: Knowledge Engineering 
+• Real-world navigation patterns, traffic densities, and avoidance tendencies are extracted from historical AIS trajectories.
+• These features are formalized into a structured knowledge base, which serves as expert information for guiding RL.
+Step 3: Baseline Q-learning 
+• A Q-learning agent is trained on the training set with the Q-table initialized to zero, without KT.
+• The learned Q-table is applied to the test set to generate trajectories representing the baseline outcome of experience-driven 
+learning.
+Step 4: KT-QL 
+• The knowledge base from Step 2 is integrated into the Q-table obtained in Step 3 by adjusting Q-values with expert-derived 
+preferences provided as supervisory signals.
+• This process embeds expert knowledge into the previously learned Q-table, refining the Q-learning process under the same 
+environment.
+Fig. 2. Example of vessel trajectory before and after H3 grid conversion.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+6 
+
+===== PAGE 7 =====
+• The refined Q-table is subsequently applied to the test set, yielding the KT-QL result.
+3.2. Environment setting
+This step describes the construction of the RL environment based on AIS data. The environment is designed by converting vessel 
+position information into nodes using the H3 grid system and then constructing a graph network where these nodes serve as the agent ’ s 
+state-transition space.
+3.2.1. Vessel location conversion to H3
+To define the state space for the RL environment, the latitude and longitude coordinates recorded in AIS data were converted into 
+the H3 spatial indexing system, an open-source framework developed by Uber Technologies (2019) . H3 is a hierarchical geospatial 
+indexing system that divides the Earth ’ s surface into uniformly sized hexagonal cells. It provides a regularized and computationally 
+efficient method for structuring and analyzing large-scale geospatial data. By transforming raw coordinate-based position data into H3 
+hexagons, vessel trajectories can be represented as normalized state nodes, enabling the construction of a structured state space 
+suitable for RL. This method has been widely employed in various location-based studies, including those on risk analysis, mobility 
+modeling, and accessibility evaluation ( Aini et al., 2023 ).
+In this study, raw position coordinates from AIS data were transformed into the H3 grid system. Each resulting hexagon cell was 
+defined as a state in the RL environment, and a graph-based state-transition structure was subsequently established based on the 
+connectivity and adjacency between neighboring nodes .
+Fig. 2 visually compares the original vessel positions and their corresponding locations after the H3 conversion. The left panel 
+illustrates the original vessel trajectory plotted in the raw coordinate system, whereas the right panel shows the same trajectory aligned 
+to the centers of H3 hexagonal cells. This transformation restructures the discontinuous point data into an organized sequence of state 
+nodes, thereby enabling the design of a graph-based learning environment. Through this conversion, the AIS-based RL environment 
+becomes spatially regularized, laying the foundation for constructing a learnable state transition framework in which the agent can be 
+trained.
+3.2.2. Graph construction
+Each vessel location, once converted into the H3 grid format, is defined as a node in a graph. In this structure, each node represents 
+a vessel ’ s state, whereas the connections (edges) and their associated weights form the core of the state-transition model for the RL 
+agent. During preprocessing, only sea-based AIS positions were retained before applying the H3 grid, which ensured that land areas 
+were inherently excluded from the navigable state space. Consequently, the graph contains only maritime nodes, and land-based 
+positions do not appear as candidates for agent transitions.
+Previous studies have often defined the adjacency between nodes by physical distance ( Alessandrini et al., 2019 ; Park et al., 2021 ). 
+Although this method enables distance-based route planning, it does not fully capture the realities of maritime navigation, where 
+vessels frequently deviate from the shortest path owing to factors such as weather conditions, ocean currents, or route congestion. 
+Furthermore, as the number of adjacent nodes increases, the search space expands rapidly, resulting in increased computational 
+complexity.
+Fig. 3. Graph network representation of the RL Environment.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+7 
+
+===== PAGE 8 =====
+To address these limitations, this study defines adjacency based on actual vessel movement histories extracted from AIS data. 
+Specifically, connectivity between two nodes was established only if a vessel was observed moving between them. This approach 
+reflects realistic navigability while reducing the size of the search space, thereby enabling more efficient and practical route explo -
+ration. Fig. 3 illustrates the resulting graph network for the RL environment, with key variables summarized in Table 2 . The graph G is 
+formally defined as follows: 
+G = ( V , E , W ) (1) 
+V = { v
+1
+, v
+2
+, … , v
+n
+} (2) 
+v
+i
+=
+ 
+lon
+v
+i
+, lat
+v
+i
+)
+, i = 1 , ⋯ , n (3) 
+E =
+{ 
+v
+i
+, v
+j
+) ⃒
+⃒
+v
+i
+, v
+j
+∈ V , i ∕= j
+}
+(4) 
+W =
+{
+w
+ij
+⃒
+⃒
+ 
+v
+i
+, v
+j
+)
+∈ E
+}
+(5) 
+The graph comprises sets of nodes V , edges E , and weights W ( Eq. (1) ). V represents the set of all H3 grid locations extracted from 
+the AIS data ( Eq. (2) ), where each node v is defined by its longitude and latitude ( Eq. (3) ). The edge set E consists of connections 
+between distinct nodes that are based on observed transitions in the AIS data ( Eq. (4) ). W assigns a weight, such as frequency or travel 
+cost, to each edge ( Eq. (5) ).
+The agent ’ s movement at a specific time t is defined by the following equations: 
+v
+c
+( t ) = ( lon
+c
+( t ) , lat
+c
+( t )) , v
+c
+( t ) ∈ V (6) 
+v
+a
+( t ) = ( lon
+a
+( t ) , lat
+a
+( t )) , v
+a
+( t ) ∈ Adj ( v
+c
+( t )) (7) 
+d ( t ) = d
+Haversine
+( v
+a
+( t ) , v
+c
+( t )) (8) 
+m ( t ) = t
+a
+  t
+c
+(9) 
+These equations define the vessel ’ s position, distance traveled, and time taken at a specific time t . The current node v
+c
+( t ) , represents 
+the vessel ’ s position at time t , expressed by its longitude and latitude. The adjacent node v
+a
+( t ) is selected from the set of candidate 
+nodes that are reachable from v
+c
+( t ) within the RL framework. The geodesic distance between the current and adjacent nodes is 
+computed using the Haversine formula, whereas the travel time between them is based on the actual time interval recorded in the AIS 
+dataset for that transit. As defined in Eq. (9) , t
+a 
+denotes the timestamp at which the vessel reaches the adjacent node, and t
+c 
+denotes the 
+timestamp at which it passes the current node. This difference represents the actual sailing time between the two nodes. 
+F ( v
+c
+, v
+a
+) =
+∑
+t
+I (( v
+c
+( t ) , v
+a
+( t )) ∈ E ) (10) 
+M ( v
+c
+, v
+a
+) =
+∑
+t
+m ( t ) I (( v
+c
+( t ) , v
+a
+( t ) ∈ E ))
+F ( v
+c
+, v
+a
+)
+(11) 
+Finally, Eqs. (10) and (11) are used to calculate the frequency of transitions and the mean travel time between nodes. The transition 
+frequency from the node v
+c
+( t ) to v
+a
+( t ) , as defined in Eq. (10) , reflects the total number of times that specific movement was observed in 
+the AIS data. Here, I ( ⋅ ) is an indicator function that returns 1 if the current and adjacent node pair ( v
+c
+( t ) , v
+a
+( t )) exactly matches the 
+observed pair in the dataset, and 0 otherwise. Subsequently, Eq. (11) computes the mean travel time between these two nodes by 
+dividing the accumulated travel time moving along that path by the number of observed transitions. These equations are evaluated per 
+vessel trajectory, where each vessel ’ s movements are processed individually. Dataset-level statistics are later obtained by aggregating 
+results across all vessels. These definitions allow the RL environment to embed real-world vessel movement patterns derived from 
+historical AIS data. These formulations allow constructing an RL environment that realistically reflects AIS-based vessel routing be -
+haviors. The agent then learns the relationships between states, actions, and rewards by interacting with this environment.
+This study ’ s navigable environment is not based on real-time updates; rather, it is a spatial abstraction derived from historical AIS 
+trajectories. To construct this environment, AIS records were first filtered to remove abnormal movements and positional outliers, 
+ensuring trajectory continuity. Each cleaned AIS position was then mapped onto the H3 grid. In this framework, each hexagonal cell 
+represents a maritime area validated as navigable by historical vessel tracks. Consequently, land areas are inherently excluded, and the 
+resulting H3 network defines the feasible state space for route planning.
+3.2.3. Density score (DS) calculation
+Regional differences in AIS data collection frequency can lead to the underrepresentation of vessel movement frequencies in areas 
+where fewer signals are recorded. This data imbalance may cause the agent to underestimate the importance of such regions during the 
+learning process, resulting in biased or suboptimal route policies. To address this issue and enhance training stability, this study in -
+troduces the concept of a DS.
+The DS adjusts for uneven data distribution by normalizing the relative transition frequency from a given node, thereby enabling 
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+8 
+
+===== PAGE 9 =====
+the agent to evaluate vessel movement patterns more equitably across the entire environment ( Park et al., 2021 ): 
+DS ( v
+c
+, v
+a
+) =
+F ( v
+c
+, v
+a
+)
+∑
+a
+F ( v
+c
+, v
+a
+)
+(12) 
+As defined by Eq. (12) , the DS from a current node v
+c
+( t ) to a neighboring node v
+a
+( t ) , is calculated by dividing the specific frequency 
+of that transition by the sum of all transition frequencies from v
+c
+( t ) . This normalization corrects for discrepancies caused by data 
+sparsity and helps ensure that transitions in underrepresented regions are fairly considered during training. The DS enhances the KT- 
+QL agent ’ s learning of balanced route policies, thereby enabling stable policy convergence, even in environments with inconsistent AIS 
+data coverage.
+3.3. Step 2: knowledge engineering
+In this step, a trajectory-based knowledge base is constructed by extracting vessel-route patterns and avoidance tendencies from 
+AIS data, reflecting navigators ’ empirical decision-making. The process identifies sequential patterns of commonly chosen waypoints 
+between departure and arrival locations and quantifies preferred or avoided routes based on relative traffic density in specific maritime 
+regions.
+The procedure involves a series of preprocessing and filtering steps to reconstruct AIS vessel trajectories into continuous state- 
+action sequences. Each AIS log is expressed as a 5-tuple, as follows: 
+x
+i
+= ( lon
+i
+, lat
+i
+, sog
+i
+, navstat
+i
+, t
+i
+) (13) 
+Where:
+lon
+i
+, lat
+i
+: Longitude and latitude coordinates at record i
+sog
+i
+: Speed over Ground (knots), GPS-based
+navstat
+i
+: Navigation status code from AIS (e.g., 1 = “ Under way using engine, ” 5 = “ moored ” )
+t
+i
+: Timestamp of AIS message reception
+The knowledge engineering procedure involves the following steps:
+• Invalid data filtering : AIS records with invalid longitude, latitude, or vessel speeds outside realistic maritime conditions are 
+removed. The set of valid raw AIS data is defined as X ( Eq. (14) ), where longitude is restricted to [0180], latitude to [0,90], and vessel 
+speed over ground (SOG) is bounded between 0 and a maximum threshold sog
+max
+. 
+X = { x
+i
+| 0 ≤ lon
+i
+≤ 180 , 0 ≤ lat
+i
+≤ 90 , 0 < sog
+i
+< sog
+max
+} (14) 
+• H3 index mapping and stay-time accumulation : Each vessel position is mapped to a hexagonal H3 index, h
+k
+∈ H 3. When 
+consecutive logs appear within the same H3 cell, their time intervals are aggregated to calculate the total dwell time ( Eq. (15) ). 
+Specifically, Δ t ( h
+k
+) denotes the cumulative stay time in cell h
+k
+, obtained by summing the time intervals Δ t
+j 
+of all records x
+j 
+mapped to 
+that cell. 
+Δ t ( h
+k
+) =
+∑
+j : x
+j
+∈ h
+k
+Δ t
+j
+(15) 
+• Trajectory segmentation by time interval : A new trajectory segment τ
+j 
+is initiated whenever the time interval between 
+consecutive AIS records exceeds a predefined threshold, T
+thres 
+( Eq. (16) ). Within each segment, all consecutive records satisfy the 
+condition Δ t
+t , t + 1
+< T
+thres
+. Formally, each trajectory segment is defined as: 
+τ
+j
+=
+{
+x
+t
+∈ X
+⃒
+⃒
+Δ t
+t , t + 1
+< T
+thres
+}
+(16) 
+• Filtering by navigation status : Logs recorded under non-navigating statuses are excluded. Only records corresponding to 
+specific navigation statuses are retained ( Eq. (17) ). In this study, we keep records where navstat
+i
+∈ { 1 , 5 } , representing “ underway 
+using engine ” and “ moored, ” respectively. 
+T
+nav
+= { x
+i
+∈ X | navstat
+i
+∈ { 1 , 5 }} (17) 
+• Removal of stationary logs based on speed : AIS records with a vessel speed below a minimum threshold, V
+min
+, are considered 
+stationary and removed. The resulting filtered set is defined as T
+filtered
+, which contains only records with speed over ground sog
+i
+≥ V
+min 
+( Eq. (18) ). 
+T
+filt ered
+= { x
+i
+∈ T
+nav
+| sog
+i
+≥ V
+min
+} (18) 
+• Final trajectory generation : The cleaned AIS records are sorted chronologically and reconstructed into state-action sequences. 
+The final knowledge base of trajectories is denoted as TR
+KT
+, consisting of M segmented trajectory ( Eq. (19) ). Each trajectory τ
+i 
+is 
+represented as an ordered sequence of state-action pairs, {( s
+t
+, a
+t
+)}
+T
+j
+t = 1 
+where T
+j 
+is the length of trajectory τ
+i 
+T R
+KT
+=
+{
+τ
+j
+}
+M
+j = 1
+, τ
+j
+= {( s
+t
+, a
+t
+)}
+T
+j
+t = 1
+(19) 
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+9 
+
+===== PAGE 10 =====
+3.4. Step 3: baseline Q-learning
+This step describes the baseline Q-learning model , in which the Q-table is initialized to zero and updated only through in -
+teractions with the RL environment, without incorporating any expert knowledge. This baseline establishes a reference policy learned 
+solely from reinforcement signals, which later serves both as a benchmark and the foundation for the KT-QL refinement in Section 3.5. 
+The components and hyperparameter settings used in this training are summarized in Table 3 , which are common to both the Baseline 
+Q-learning and KT-QL models.
+As shown in Eqs. (20) and (21) , the agent ’ s current state S
+t 
+is its node location, whereas the available action A
+t
+is the selection of an 
+adjacent node. According to Eq. (22) , the next state S
+t + 1 
+is determined by the action A
+t 
+taken at the current state. 
+S
+t
+= v
+c
+( t ) (20) 
+A
+t
+= v
+a
+( t ) (21) 
+S
+t + 1
+= A
+t
+(22) 
+To promote efficient routing, four types of penalties are defined to discourage suboptimal behavior:
+• Penalty 1 : Revisiting a node 
+H ( t ) = { S
+τ
+| 0 ≤ τ < t } (23) 
+P
+DUP
+t
+=
+{
+p
+DUP
+, if S
+t + 1
+∈ H ( t )
+0 , otherwise
+(24) 
+This penalty discourages the agent from looping or revisiting nodes. As shown in Eqs. (23) and (24) , the set H ( t ) contains all nodes 
+visited up to time t . If the agent ’ s next chosen state, S
+t + 1
+, is already in this set, the penalty P
+DUP
+t 
+is imposed.
+• Penalty 2 : Moving away from the destination 
+d
+dest
+( S ) = HaversineDistance
+ 
+S , S
+DEST
+)
+(25) 
+P
+CLOSE
+t
+=
+{
+p
+CLOSE
+, if d
+dest
+( S
+t + 1
+) > d
+dest
+( S
+t
+)
+0 , otherwise
+(26) 
+This penalty discourages the agent from selecting a path that increases its distance from the final destination. The Haversine 
+distance between the next state ( S
+t + 1
+) and destination ( S
+DEST
+) is calculated ( Eq. (25) ). If this distance is greater than the current 
+distance, the penalty P
+CLOSE
+t 
+is applied, as shown in Eq. (26) .
+• Penalty 3 : Moving at a censored node 
+P
+CEN
+t
+=
+{
+p
+CEN
+, if | Adj ( S
+t + 1
+)| = 0 and S
+t + 1
+∕= S
+DEST
+0 , otherwise
+(27) 
+This penalty, P
+CEN
+t
+, is imposed if the agent moves to a node that has no further connections, such as an isolated or terminal node that 
+Table 3 
+Q-learning components and hyperparameters for vessel route planning.
+Notation Feature Description
+α Learning rate Controls the extent to which new experiences update the Q-value 
+( α = 0 . 1)
+γ Discount rate A factor ( γ = 0 . 9) balancing the importance of immediate vs. future rewards
+ϵ ϵ -greedy policy A balance between exploring random actions ( ϵ = 0 . 1) and exploiting learned actions
+S
+t
+State Agent ’ s current state, represented by its current node
+A
+t
+Action Set of available actions from the current state, corresponding to adjacent nodes
+S
+DEST
+Destination state Fixed terminal state representing the voyage destination
+Adj ( S ) Neighbor states Set of navigable neighbor states of s
+B ( t ) Bounding box State set defined by the current and previous states at time t
+d
+dest
+( S ) Destination Distance Distance from state s to destination S
+DEST 
+(e.g., Haversine distance)
+Q ( s , a ) Q-Value table Expected cumulative reward for state-action pair ( s , a )
+r
+t
+Total reward Sum of all reward components at time t
+p
+t
+Total penalty Sum of all penalty components at time t
+p
+dup
+t
+Penalty 1 Penalty for revisiting a previously visited node
+p
+close
+t
+Penalty 2 Penalty for moving away from the destination
+p
+cen
+t
+Penalty 3 Penalty for moving to a censored/isolated node
+p
+rev
+t
+Penalty 4 Penalty for reversing direction (entering bounding box B ( t ) )
+r
+den
+t
+Reward 1 Reward based on density score DS ( s
+t
+, s
+t + 1
+)
+r
+dest
+t
+Reward 2 Reward for reaching the final destination S
+DEST
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+10 
+
+===== PAGE 11 =====
+is not the destination ( Eq. (27) ).
+• Penalty 4 : Reversing direction 
+minLon ( t ) = min ( lon
+c
+( t ) , lon
+a
+( t )) (28) 
+minLat ( t ) = min ( lat
+c
+( t ) , lat
+a
+( t )) (29) 
+maxLon ( t ) = max ( lon
+c
+( t ) , lon
+a
+( t )) (30) 
+maxLat ( t ) = max ( lat
+c
+( t ) , lat
+a
+( t )) (31) 
+B ( t ) =
+{
+v
+i
+∈ V | minLon ( t ) < lon
+v
+i
+< maxLon ( t ) , minLat ( t ) < lat
+v
+i
+< maxLat ( t )
+}
+(32) 
+P
+REV
+t
+=
+{
+p
+REV
+, if S
+t + 1
+∈ B ( t )
+0 , otherwise
+(33) 
+This penalty prevents the agent from immediately reversing its course. As defined in Eqs. (28) – (31) , a bounding box B ( t ) is con -
+structed using the coordinates of the current and previous nodes. If the next state S
+t + 1 
+falls within this area, the movement is considered 
+a reversal, and the penalty P
+REV
+t 
+is applied, as shown in Eq. (33) .
+To guide the agent toward optimal routes, two types of rewards are defined:
+• Reward 1 : Reward based on density score 
+R
+DEN
+t
+= DS ( s
+t
+, s
+t + 1
+) (34) 
+This reward encourages the agent to follow empirically meaningful transitions, even from sparsely sampled regions. The density 
+score DS ( S
+t
+, S
+t + 1
+) is calculated as defined in Eq. (34) , which represents the normalized transition frequency between two consecutive 
+states from AIS trajectories. By incorporating this measure into the reward ( Eq. (34) ), the agent is guided to preserve both frequently 
+used navigation corridors and low-frequency but operationally important paths.
+• Reward 2 : Reward for reaching the destination 
+R
+DEST
+t
+=
+{
+R
+DEST
+, if S
+t + 1
+= S
+DEST
+0 , otherwise
+(35) 
+This reward reinforces the agent ’ s primary objective, i.e., reaching the final destination. A large, fixed reward, r
+DEST
+, is granted if the 
+agent ’ s next state S
+t + 1 
+equals the final destination S
+DEST
+( Eq. (35) ), thereby strongly promoting successful route completion.
+At each time step t , the total penalty ( P
+t
+) and total reward ( R
+t
+) are calculated by summing their respective components as follows: 
+p
+t
+= p
+DUP
+t
++ p
+CLOSE
+t
++ p
+CEN
+t
++ p
+REV
+t
+(36) 
+r
+t
+= r
+DEN
+t
++ r
+DEST
+t
+(37) 
+Although the reward and penalty functions were not derived from specific regulatory thresholds, their design follows the same 
+principle as that of current maritime decarbonization policies: minimizing fuel consumption and voyage inefficiency. Because fuel 
+consumption is positively correlated with sailing time and distance, penalties were introduced to discourage behaviors that cause 
+unnecessary voyage extension or energy waste. These penalties target actions such as revisiting nodes ( p
+DUP
+t
+), moving away from the 
+destination ( p
+CLOSE
+t
+), or performing reverse-direction transitions ( p
+REV
+t
+). This formulation encourages the agent to minimize total dis -
+tance and travel time, thereby promoting energy-efficient routing aligned with the aims of international maritime emission-reduction 
+measures.
+In baseline Q-learning, the Q-value represents the expected cumulative reward for taking a specific action in a given state. These Q- 
+values are updated iteratively using the Bellman equation, as follows: 
+Q ( s
+t
+, a
+t
+) ← Q ( s
+t
+, a
+t
+) + α
+[
+( p
+t
++ r
+t
+) + γ max
+a
+ʹ
+∈ Adj ( s
+t + 1
+)
+Q ( s
+t + 1
+, a
+ʹ
+)   Q ( s
+t
+, a
+t
+)
+]
+(38) 
+In this update rule: 
+• Q ( s
+t
+, a
+t
+) is the current Q-value for the state – action pair ( s
+t
+, a
+t
+) .
+• α is the learning rate, which determines how strongly new experiences update the existing estimate.
+• ( p
+t
++ r
+t
+) is the immediate feedback at time t , consisting of both reward and penalty.
+• γ is the discount factor, which balances the importance of immediate versus future returns.
+• max
+a
+ʹ
+∈ Adj ( s
+t + 1 )
+Q ( s
+t + 1
+, a
+ʹ
+) is the maximum expected future return from the next state s
+t + 1
+, obtained by considering all feasible actions a
+ʹ
+.
+This update rule allows the agent to learn from both immediate feedback and long-term potential, gradually improving its policy 
+through repeated interactions with the environment. To balance exploration (discovering new paths) and exploitation (using known 
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+11 
+
+===== PAGE 12 =====
+good paths), the ε -greedy strategy is adopted for action selection, as follows:
+a
+t
+=
+{
+argmax
+a ∈ Adj ( s t )
+Q ( s
+t
+, a
+t
+) , with probability 1   ϵ
+Uniform ( Adj ( s
+t
+)) , with probability ϵ
+(39) 
+With probability 1   ϵ , the agent selects the action with the highest Q-value; with probability ϵ , it chooses an action uniformly at 
+random from the feasible set Adj ( s
+t
+) . This strategy encourages the discovery of better policies while leveraging the knowledge 
+accumulated in the Q-values.
+The training process is grounded in a set of real-world vessel movement trajectories, TR , extracted from AIS data: 
+TR = { T R
+1
+, T R
+2
+, ⋯ , T R
+N
+} (40) 
+Each trajectory, TR
+i
+, is a time-ordered sequence of state – action pairs: 
+TR
+i
+=
+{ 
+s
+i , 1
+, a
+i , 1
+)
+,
+ 
+s
+i , 2
+, a
+i , 2
+)
+, … ,
+ 
+s
+i , T
+i
+, a
+i , T
+i
+)}
+(41) 
+Where:
+N : Number of trajectories extracted from AIS data
+s
+i , t
+: State of the agent at time t in TR
+i
+a
+i , t
+: Action selected at time t in TR
+i
+T
+i
+: length (number of steps) of trajectory TR
+i
+These extracted trajectories serve as the exclusive training dataset for the baseline Q-learning agent , ensuring that the learned 
+policy is derived solely from reinforcement signals, without expert intervention. By relying on realistic AIS-derived trajectories, the 
+model is guided toward developing meaningful and feasible vessel routes under purely exploratory learning conditions.
+Algorithm 1 outlines the procedure through which the baseline Q-learning agent learns a policy-based vessel route in the RL 
+environment defined in Section 3.2. The algorithm iteratively explores and updates its decision policy until convergence. Once training 
+on all trajectories is complete, the final Q-table is returned. This Q-table not only provides a benchmark for comparative experiments 
+but also serves as the foundation for the knowledge-transfer refinement described in Section 3.5.
+3.5. Step 4: KT-QL
+This section introduces the KT-QL procedure, which leverages expert trajectories extracted from AIS data to refine the policy 
+learned through baseline Q-learning. Unlike the baseline model, which starts from a zero-initialized Q-table, KT-QL reuses the Q-table 
+obtained in Section 3.4 as the starting point and further adjusts it by embedding expert-derived preferences. In this way, expert 
+knowledge is integrated not as a replacement for baseline training, but as an additional supervisory signal that guides subsequent Q- 
+value updates.
+The goals of this KT method are as follows: 
+• To refine the agent ’ s policy by reusing the baseline Q-table while incorporating expert trajectories as supervisory signals;
+• To reduce unnecessary early-stage exploration and accelerate convergence;
+• To steer the agent toward realistic route learning by embedding grounded navigation preferences.
+The overall procedure is presented in Algorithm 2 , which defines how the baseline Q-table is reused and updated with AIS-derived 
+trajectories knowledge.
+Algorithm 1 
+Q-learning.
+1: Read TR = { TR
+1
+, TR
+2
+, ⋯ , TR
+N
+} from AIS data
+2: Initialize Q - table: Q ( s , a ) ← 0 ∀( s , a )
+3: Set E = predefined number of training episode of each TR
+i
+4: For each trajectory TR
+i
+∈ TR do 
+5: for episode e = 1 to E do
+6: Set t = 1; s
+t
+= s
+i , 1
+; S
+DEST
+= S
+i , T i
+7: while s
+t
+∕= S
+DEST 
+do
+8: Select a
+t 
+using ϵ -greedy policy (Equation. 32)
+9: Execute action, move to next state: s
+t + 1
+← a
+t
+10: Compute total penalty p
+t 
+and r
+t 
+(Equation. 29 – 30)
+11: Update Q-value using Eq. (31) :
+12: t ← t + 1
+13: end while
+14: end for
+15: end for
+16: Return learned Q-table
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+12 
+
+===== PAGE 13 =====
+4. Experiments
+4.1. Dataset
+The AIS data used for this experiment, as described in Table 4 , were collected from 1500 vessels over a 6-month period in 2019 and 
+included key columns such as MMSI, position, speed (SOG), and heading. To define the study region, vessel positions were filtered 
+within a bounding box (Longitude [120
+◦
+E – 140
+◦
+E], Latitude [30
+◦
+N – 44
+◦
+N]), ensuring that only trajectories within the East Asia 
+maritime region were retained. To evaluate the generalizability and real-world applicability of the proposed model and prevent 
+overfitting, the dataset was partitioned into training and test sets. Trajectories were evenly sampled across six distinct distance in -
+tervals to prevent bias toward any particular voyage range, facilitating consistent policy learning across diverse operational scenarios.
+As detailed in Table 5 , the training set contained a total of 678 trajectories (approximately 113 per interval), whereas the test 
+dataset, used exclusively for evaluation, contained 294 trajectories (approximately 49 per interval).
+4.2. Experiment settings
+To verify the effectiveness of the proposed KT-QL method and evaluate the impact of the reward and penalty design, a total of seven 
+experimental cases were constructed. In each case, the performance of the KT-QL model was compared with that of standard Q- 
+learning under identical conditions. Model performance was assessed using three evaluation metrics: Hausdorff distance, DS, and fuel 
+consumption. Each metric quantitatively measures how closely the policy learned by the agent replicates the actual vessel routes 
+observed in the AIS data.
+4.2.1. Hausdorff distance
+The Hausdorff distance measures the dissimilarity between two sets of points — in this case, the agent ’ s predicted trajectory and the 
+vessel ’ s actual trajectory from AIS data: 
+H ( A , B ) = max
+{
+sup
+a ∈ A
+inf
+b ∈ B
+d ( a , b ) , sup
+b ∈ B
+inf
+a ∈ A
+d ( a , b )
+}
+(42) 
+Where:
+A : Actual trajectories extracted from AIS data (Ground Truth)
+B : Predicted trajectory
+d ( a , b ) : Distance between a and b
+sup : Maximum value among the elements in the set
+inf : Minimum value among the elements in the set
+As defined in Eq. (42) , the Hausdorff distance identifies the maximum distance from any point in one set to the closest point in the 
+other set. A lower Hausdorff distance indicates a higher morphological similarity between the predicted and actual routes, reflecting 
+better policy performance.
+4.2.2. DS
+The DS evaluates how well the predicted trajectory aligns with the major vessel traffic routes observed in the AIS data. As defined in 
+Eq. (12) , this score is derived from the transition frequency between nodes. Because the RL model ’ s reward function uses this density, 
+the score directly reflects how successfully the agent learns to follow frequently traveled and operationally preferred routes. A higher 
+final DS indicates that the predicted route more closely aligns with high-frequency trajectories, implying a more realistic sailing 
+behavior.
+Algorithm 2 
+KT-QL.
+1: Read baseline Q-table Q ( s
+t
+, a
+t
+) and knowledge trajectories TR
+KT
+2: Initialize transfer Q-table: KT ( s , a ) ← Q ( s , a ) for all ( s , a )
+3: for each trajectory TR
+i
+∈ TR
+KT 
+do
+4: Set t = 1
+5: while t 〈 | TR
+i
+|
+6: Set s
+t
+= s
+i , t
+; a
+t
+← a
+i , t
+7: Obtain penalty p
+t 
+and reward r
+t 
+from trajectory knowledge
+8: Update transfer Q-value: 
+KT ( s
+t
+, a
+t
+) ← KT ( s
+t
+, a
+t
+) + α [( p
+t
++ r
+t
+) + γ [ KT ( s
+t + 1
+, a
+t + 1
+)   KT ( s
+t
+, a
+t
+)]
+9: t ← t + 1
+10: end while
+11: end for
+12: Return transfer Q-table KT ( s , a )
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+13 
+
+===== PAGE 14 =====
+4.2.3. Fuel consumption
+To evaluate the energy efficiency of the predicted routes, fuel consumption was estimated using a standardized method. As 
+obtaining real fuel-consumption data for various ship types is challenging, a reference vessel with the characteristics of a real-world 
+ocean-going bulk carrier was assumed for all calculations ( Table 6 ). This approach enables consistent comparisons by applying the 
+same vessel specifications — including service speed, engine power — to both the actual and predicted trajectories. Importantly, 
+instead of using a single constant specific fuel oil consumption (SFOC) value, we derived SFOC as a function of engine power from the 
+manufacturer ’ s shop-test results (load points at 25/50/75/85/100 % of maximum continuous rating (MCR)). We constructed an SFOC- 
+power curve via piecewise-linear interpolation between adjacent shop-test points, with linear end-segment extrapolation when 
+needed. This ensures that each step ’ s SFOC reflects the corresponding operating power.
+Fuel consumption was calculated using Eq. (43) . First, the distance d ( t ) between two consecutive nodes v
+c
+( t ) and v
+a
+( t ) was 
+computed using the Haversine formula ( Eq. (8) ). The travel time T ( t ) was then estimated based on the ship ’ s speed S ( t ) : 
+T ( t ) =
+d ( t )
+S ( t )
+(43) 
+Speed and propulsion power were obtained from real-world speed-trial data using a speed-power curve. The specific fuel oil 
+consumption was not treated as a constant; instead, we used the manufacturer ’ s shop-test SFOC-power relation, constructed by 
+piecewise-linear interpolation between certified load points (25/50/75/85/100 % of MCR), with linear end-segment extrapolation, 
+when needed. Accordingly, stepwise fuel consumption is given as follows:
+The propulsion power at each time step is determined as a function of the vessel ’ s speed using the speed-power curve from sea 
+trials: 
+P ( t ) = f ( S ( t )) (44) 
+The specific fuel oil consumption at each operating point is then obtained as a function of the engine power, based on the shop-test 
+interpolation: 
+Table 4 
+Description of the AIS data used for experiments.
+Variable Description
+Subjects AIS data of 1500 vessels
+Period 2019.01 – 2019.06
+Columns MMSI, Report date, Longitude, Latitude, SOG, Heading
+Region of Interest Bounding box: Longitude [120
+◦
+E – 140
+◦
+E], Latitude [30
+◦
+N – 44
+◦
+N] (East Asia region)
+Source commercial AIS provider
+Table 5 
+Composition of training and test sets by distance.
+Dataset Distance No of Trajectories No of Rows
+Train ~ 99 km 113 594
+100 – 299 km 113 1375
+300 – 499 km 113 2968
+500 – 699 km 113 4505
+700 – 899 km 113 6094
+900 km ~ 113 7954
+Test ~ 99 km 49 262
+100 – 299 km 49 580
+300 – 499 km 49 1268
+500 – 699 km 49 1898
+700 – 899 km 49 2659
+900 km ~ 49 3456
+Table 6 
+Specifications of the reference vessel for fuel-consumption estimation.
+Variable Description
+Ship type Bulk carrier
+Ship size 334.03 (Length) × 62.00 (Breadth) × 29.00 (Depth)
+Gross tonnage 172,521 tons
+Deadweight 324,690 tons
+Service speed 15.3 knots
+Propulsion power 15,302 kW
+SFOC Shop-test curve (g/kWh) as a function of power; interpolated between certified load points
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+14 
+
+===== PAGE 15 =====
+SFOC ( P ( t )) = g ( P ( t )) (45) 
+Finally, fuel consumption for each step is calculated as defined in Eq. (46) , expressed in metric tonnes. 
+FOC ( t ) =
+SFOC ( P ( t )) × P ( t ) × T ( t )
+1000000
+(46) 
+The total fuel consumption over the trajectory is given by 
+FOC
+total
+=
+∑
+N
+t = 1
+FOC ( t ) (47) 
+To evaluate the accuracy of the fuel-consumption prediction, two error metrics were used: 
+Root Mean Square Error ( RMSE ) =
+̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅ ̅̅̅̅̅̅̅̅̅̅̅̅̅̅̅ ̅
+1
+N
+∑
+N
+i = 1
+( Y
+i
+ 
+̂
+Y
+i
+)
+√
+√
+√
+√
+(48) 
+Mean Absolute Percentage Error ( MAPE ) =
+1
+N
+∑
+N
+i = 1
+⃒
+⃒
+⃒
+⃒
+Y
+i
+ 
+̂
+Y
+i
+Y
+i
+⃒
+⃒
+⃒
+⃒
+(49) 
+Where:
+N : number of edges in the target trajectory
+Y
+i
+: Fuel consumption of the actual trajectory
+̂
+Y
+i
+: Fuel consumption of the predicted trajectory
+RMSE quantifies the absolute deviation between actual and predicted fuel consumption, whereas the MAPE captures the relative 
+percentage error. For both metrics, lower values indicate more precise and reliable estimations.
+4.3. Hyperparameter selection
+In this section, the performance of the proposed KT-QL model is compared with that of baseline Q-learning across the seven 
+experimental cases defined in Table 7 , each with a different reward and penalty structure. By adjusting these coefficients, the ex -
+periments were designed to analyze how different configurations influence the model ’ s route selection strategy.
+Table 8 presents the performance comparison results between baseline Q-learning and KT-QL across all cases. The following in -
+sights can be drawn: 
+• Hausdorff distance : KT-QL consistently achieved lower Hausdorff distance values than Q-learning across all cases, indicating 
+trajectories more similar to the actual AIS routes. Notably, Case 7 produced the lowest Hausdorff distance, demonstrating the 
+influence of the reward – penalty structure on route optimization. The largest relative gains were observed in Case 7, where the 
+destination reward weight was reduced. In this setting, baseline Q-learning tended to diverge toward unrealistic detours, while KT- 
+QL leveraged expert-informed initialization to balance between reaching the goal and following realistic intermediate routes. This 
+shows that priors play a decisive role in stabilizing learning when the direct incentive to reach the destination is weakened.
+• DS : KT-QL showed a consistent improvement in DS, suggesting it more effectively captured density-based navigation patterns. For 
+example, in Case 6, where the DS reward weight was reduced, MAPE improved from 0.144 to 0.118 (approximately 18.1 %), 
+maintaining realistic route-following behavior even under weaker density incentives. This outcome highlights how expert priors 
+preserved the structural patterns of main corridors, allowing secondary terms such as R
+DEST
+t 
+to act as stabilizers rather than sole 
+drivers of learning. In contrast, baseline Q-learning was more sensitive to weakened signals, reducing its ability to maintain 
+consistent performance.
+• Fuel consumption : KT-QL also demonstrated superior accuracy in fuel-consumption prediction across all trajectory segments. The 
+most substantial improvement occurred in Case 6, where RMSE decreased from 7477 to 6133 (approximately 18 %). This shows 
+that when the DS reward is downweighted, penalties such as P
+CLOSE
+t 
+and P
+REV
+t 
+become decisive in promoting smooth and energy- 
+efficient trajectories. Furthermore, Cases 4 and 5 also yielded strong improvements, though less pronounced than Case 6. These 
+Table 7 
+Penalty and reward coefficients for the experimental cases.
+Case Penalty 1 Penalty 2 Penalty 3 Penalty 4 Reward 1 Reward 2
+Case 1 – 1 – 1 – 1 – 1 DS 5
+Case 2 – 0.5 – 1 – 1 – 1 DS 5
+Case 3 – 1 – 0.5 – 1 – 1 DS 5
+Case 4 – 1 – 1 – 0.5 – 1 DS 5
+Case 5 – 1 – 1 – 1 – 0.5 DS 5
+Case 6 – 1 – 1 – 1 – 1 0.5 × DS 5
+Case 7 – 1 – 1 – 1 – 1 DS 2.5
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+15 
+
+===== PAGE 16 =====
+results suggest that maintaining strong weights ( – 1) for P
+DUP
+t 
+and P
+CLOSE
+t 
+is critical for fuel efficiency. Even when other penalties 
+were relaxed ( P
+CEN
+t 
+in Case 4 or P
+REV
+t 
+in Case 5), KT-QL avoided redundant loops and detours thanks to these two core penalties, 
+leading to more direct and efficient routes. Finally, Case 7 demonstrated that KT-QL remains robust even when the destination 
+reward is weakened. Expert-informed initialization ensured that the agent still converged to the goal without unnecessary detours, 
+translating into improved fuel-consumption accuracy compared with Q-learning.
+In summary, KT-QL outperformed baseline Q-learning across all evaluation metrics, with Case 6 demonstrating the strongest gains 
+and Cases 4, 5, and 7 demonstrating robustness under varied conditions. Overall, the experimental results reveal a clear distinction 
+between penalties and rewards adjustments. Penalty adjustments show that duplicate-visit ( P
+DUP
+t
+) and destination-deviation ( P
+CLOSE
+t
+) 
+penalties are critical across all evaluation metrics, particularly for controlling fuel efficiency. In contrast, relaxing penalties for 
+censored nodes ( P
+CEN
+t
+) or reversals ( P
+REV
+t
+) has comparatively less impact, as KT-QL can still avoid dead ends and oscillations due to 
+expert-informed initialization. Conversely, reward adjustments highlight KT-QL ’ s robustness: even when density or destination in -
+centives are weakened, the integration of expert priors stabilizes learning and yields stronger overall performance (e.g., Case 6 for fuel 
+efficiency and Case 7 for trajectory realism).
+4.4. Comparisons with baseline methods
+In this section, the RL-based methods (Q-learning and KT-QL) are compared with three baseline algorithms to evaluate how 
+effectively each approach predicts AIS-based vessel trajectories. The baselines are formulated as shortest-path problems solved using a 
+Dijkstra search procedure but differ in their optimization criteria: (i) Shortest Path , which minimizes cumulative geographic distance; 
+(ii) Shortest Moving Time , which minimizes estimated travel time by incorporating average observed speeds; and (iii) Maximize 
+Density Score , which maximizes the cumulative transition frequency to emphasize empirically preferred traffic corridors.
+All baselines operate on an AIS-derived navigable graph constructed from historical vessel trajectories. Because this graph only 
+retains empirically observed sea transitions, landmasses are inherently excluded, and the computed routes remain geographically 
+feasible. Performance comparisons are reported in the subsequent analysis, where distance interval further breaks down interval 
+results to highlight differences across short-, medium-, and long-range trajectories.
+Here, nodes are denoted as s
+i 
+and s
+j 
+when describing the baseline methods. These correspond conceptually to the state represen -
+tations v
+c
+( t ) and v
+a
+( t ) defined in Section 3.2.2 for the RL formulation, but are indexed by graph position rather than temporal order. 
+Likewise, the density score DS
+ij 
+used in the baseline methods is equivalent to DS ( v
+c
+, v
+a
+) in the RL formulation, both representing the 
+normalized transition frequency between two connected states.
+(1) Shortest path (distance minimization) : The edge weight w
+ij
+corresponds to the great-circle distance between two consecutive 
+nodes. 
+w
+ij
+= d
+Haversine
+ 
+s
+i
+, s
+j
+)
+(50) 
+where s
+i 
+and s
+j 
+denote consecutive states (discretized waypoints) along the vessel ’ s navigable graph. This variant minimizes the cu -
+mulative geographic distance and corresponds to the conventional shortest-path problem.
+(2) Shortest moving time (time minimization) : The edge weight w
+ij 
+represents the estimated travel time between consecutive 
+nodes. 
+w
+ij
+=
+d
+Haversine
+ 
+s
+i
+, s
+j
+)
+v
+ij
+(51) 
+Table 8 
+Performance comparison between Baseline Q-learning and KT-QL.
+Case Methods Hausdorff Distance Density Score Fuel Consumption
+RMSE MAPE RMSE MAPE
+Case 1 Baseline Q-Learning 0.195 0.078 0.174 6790 0.134
+KT-QL 0.177 0.075 0.147 6447 0.127
+Case 2 Baseline Q-Learning 0.198 0.069 0.157 7792 0.114
+KT-QL 0.181 0.07 0.137 7091 0.108
+Case 3 Baseline Q-Learning 0.197 0.066 0.146 7769 0.109
+KT-QL 0.175 0.068 0.13 7266 0.104
+Case 4 Baseline Q-Learning 0.191 0.067 0.15 7789 0.104
+KT-QL 0.169 0.069 0.127 6652 0.096
+Case 5 Baseline Q-Learning 0.185 0.068 0.149 7550 0.1
+KT-QL 0.163 0.068 0.123 6384 0.092
+Case 6 Baseline Q-Learning 0.181 0.067 0.144 7477 0.097
+KT-QL 0.162 0.064 0.118 6133 0.087
+Case 7 Baseline Q-Learning 0.181 0.066 0.144 7171 0.094
+KT-QL 0.155 0.064 0.12 6189 0.088
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+16 
+
+===== PAGE 17 =====
+where v
+ij 
+is the mean AIS-derived speed between s
+i 
+and s
+j
+. This variant seeks the path with the minimum estimated travel time, 
+reflecting navigational efficiency in terms of voyage duration.
+(3) Maximize density score (traffic preference) : The edge weight w
+ij 
+is set to the inverse of the AIS-derived density score. 
+w
+ij
+=
+1
+DS
+ij
+(52) 
+where DS
+ij 
+is the normalized transition frequency between s
+i 
+and s
+j
+. This formulation prioritizes empirically preferred shipping lanes by 
+maximizing the cumulative DS across the route, thereby emphasizing historically observed traffic corridors.
+For further comparison, we additionally implemented a DQN following Mnih et al. (2015) as a representative deep RL method. 
+Unlike tabular Q-learning, which maintains an explicit state – action table, DQN approximates the action-value function Q ( s
+t
+, a
+t
+; θ )
+using a neural network parameterized by weights ( θ ). This approach enables generalization across high-dimensional state spaces. 
+Although DQN was implemented solely for baseline comparison, it shares the same notation system (e.g., s
+t
+, a
+t
+, r
+t
+, Q ( s
+t
+, a
+t
+) ) as the KT-QL 
+and traditional Q-learning formulations. Furthermore, the reward and state definitions used for the DQN are identical to those in the 
+KT-QL framework, ensuring complete consistency of symbols and variables throughout the manuscript. Including DQN allows us to 
+contrast the performance of our proposed KT-QL not only with classical optimization and tabular RL, but also with a modern deep RL 
+technique. Table 9 presents a summary of the performance comparison of Dijkstra, Q-learning, and KT-QL across different distance 
+ranges.
+4.4.1. Hausdorff distance
+Across all distances, KT-QL achieved lower Hausdorff distance values than both Q-learning and all Dijkstra variants, indicating 
+superior shape similarity to actual vessel routes. The improvement was particularly notable for long-range routes ( ≥ 900 km), where 
+KT-QL reduced the Hausdorff distance by approximately 39 % compared to Q-learning (from 0.594 to 0.360). This suggests that KT-QL 
+effectively suppresses unnecessary exploration and converges toward expert-informed policies in extended navigation scenarios. KT- 
+QL also outperformed all variants of the Dijkstra algorithm in shape similarity, demonstrating a superior ability to capture realistic 
+Table 9 
+Performance comparison of Dijkstra, Q-learning, and KT-QL across all methods.
+Distance Methods Hausdorff Distance Density Score Fuel Consumption
+RMSE MAPE RMSE MAPE
+~ 99 km Dijkstra (Shortest path) 0.135 0.126 0.306 3.045 0.237
+Dijkstra (Shortest moving time) 0.152 0.137 0.299 3.024 0.229
+Dijkstra (Maximize density score) 0.141 0.107 0.419 3.039 0.239
+Q-Learning 0.04 0.044 0.123 1.387 0.075
+KT-QL 0.04 0.059 0.095 1.646 0.08
+DQN 0.150 0.158 0.312 4.099 0.333
+100 – 299 km Dijkstra (Shortest path) 0.219 0.107 0.266 4.756 0.177
+Dijkstra (Shortest moving time) 0.276 0.136 0.315 4.459 0.157
+Dijkstra (Maximize density score) 0.162 0.09 0.246 3.524 0.117
+Q-Learning 0.101 0.055 0.124 2.966 0.103
+KT-QL 0.109 0.041 0.097 2.575 0.071
+DQN 0.124 0.139 0.204 2.852 0.17
+300 – 499 km Dijkstra (Shortest path) 0.376 0.085 0.19 8.717 0.149
+Dijkstra (Shortest moving time) 0.44 0.105 0.217 10.64 0.188
+Dijkstra (Maximize density score) 0.298 0.101 0.287 10.101 0.15
+Q-Learning 0.163 0.059 0.13 7.277 0.132
+KT-QL 0.16 0.061 0.12 6.707 0.094
+DQN 0.323 0.094 0.254 7.516 0.157
+500 – 699 km Dijkstra (Shortest path) 0.562 0.092 0.189 9.756 0.135
+Dijkstra (Shortest moving time) 0.583 0.115 0.253 17.555 0.252
+Dijkstra (Maximize density score) 0.319 0.09 0.233 5.756 0.074
+Q-Learning 0.272 0.094 0.194 12.324 0.164
+KT-QL 0.235 0.084 0.148 9.710 0.125
+DQN 0.562 0.092 0.268 9.173 0.161
+700 – 899 km Dijkstra (Shortest path) 0.681 0.074 0.149 13.821 0.102
+Dijkstra (Shortest moving time) 0.614 0.096 0.186 18.011 0.176
+Dijkstra (Maximize density score) 0.333 0.129 0.346 14.002 0.123
+Q-Learning 0.335 0.081 0.163 13.655 0.129
+KT-QL 0.326 0.071 0.133 14.804 0.14
+DQN N/A N/A N/A N/A N/A
+900 km ~ Dijkstra (Shortest path) 0.682 0.088 0.2 21.898 0.14
+Dijkstra (Shortest moving time) 0.638 0.113 0.217 20.161 0.165
+Dijkstra (Maximize density score) 0.689 0.124 0.313 25.179 0.188
+Q-Learning 0.594 0.064 0.146 18.942 0.149
+KT-QL 0.36 0.07 0.152 11.981 0.077
+DQN N/A N/A N/A N/A N/A
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+17 
+
+===== PAGE 18 =====
+navigation behavior compared to purely distance- or density-based searches.
+When compared to the additional deep RL method, DQN, KT-QL also demonstrated clear advantages. DQN produced higher tra -
+jectory errors across all distance ranges, where convergence was achieved, and it failed to generate stable solutions for routes beyond 
+700 km. This instability highlights the difficulty of applying deep RL to sparse maritime environments, where training signals are 
+limited. In contrast, KT-QL consistently outperformed DQN, reinforcing its ability to generalize across both short- and long-range 
+routes.
+Overall, KT-QL outperformed all Dijkstra variants, tabular Q-learning, and DQN in terms of shape similarity, demonstrating a 
+superior capacity to capture realistic navigation behavior compared to both classical optimization searches and modern deep RL 
+techniques.
+4.4.2. DS
+KT-QL recorded the lowest DS RMSE and MAPE across all distance ranges, demonstrating its effectiveness in reproducing high- 
+density traffic patterns. For example, in the 500 – 699 km range, Q-learning yielded a DS RMSE of 0.094, whereas KT-QL reduced it 
+to 0.084. Moreover, the MAPE improved by approximately 24 % compared to Q-learning (from 0.194 to 0.148). Its superior per -
+formance, even against the density-maximizing Dijkstra variant, indicates that KT-QL learns to follow major traffic corridors while 
+balancing optimality with adaptability, rather than simply replicating historical data.
+Compared to the DQN, KT-QL again shows a clear advantage. Although DQN occasionally reduced DS error relative to Dijkstra in 
+short- and mid-range distances, its performance was inconsistent and degraded as route length increased. Particularly, DQN failed to 
+converge for distances beyond 700 km, yielding no valid DS estimates in long-range scenarios. These results underline that while DQN 
+has the representational capacity to capture complex transitions, it struggles in sparse AIS-derived environments. KT-QL, by inte -
+grating expert trajectory knowledge, achieved both stability and accuracy across all ranges.
+4.4.3. Fuel consumption
+Regarding energy efficiency, KT-QL generally outperformed Q-learning and most Dijkstra-based methods across the evaluated 
+distance ranges. For example, in the 300 – 499 km range, Q-learning recorded a fuel consumption RMSE of 7.277 and a MAPE of 0.132 , 
+whereas KT-QL reduced these to 6.707 and 0.094 . Similarly, in the 500 – 699 km range, KT-QL lowered the RMSE from 12.324 to 
+9.710 and the MAPE from 0.164 to 0.125 , corresponding to a relative error reduction of about 24 %.
+The most pronounced advantage was observed in long-distance scenarios. For routes exceeding 900 km, KT-QL reduced the RMSE 
+from 18.942 (Q-learning) to 11.981, a 37 % improvement, while also halving the MAPE from 0.149 to 0.077. These results illustrate 
+that KT-QL is particularly effective in suppressing unnecessary detours and converging toward fuel-efficient navigation policies in 
+extended maritime contexts.
+When compared with the DQN, KT-QL showed generally lower errors across all ranges where DQN converged. For instance, in the 
+100 – 299 km range, DQN produced an RMSE of 2.852 and a MAPE of 0.170, whereas KT-QL achieved 2.575 RMSE and 0.071 MAPE. In 
+the 300 – 499 km interval, DQN ’ s RMSE reached 7.516 with a MAPE of 0.157, while KT-QL achieved 6.707 RMSE and 0.094 MAPE. 
+Fig. 4. Comparison of Hausdorff distances by method and voyage distance.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+18 
+
+===== PAGE 19 =====
+DQN frequently failed to converge for distances beyond 700 km, which limited its applicability in long-range scenarios.
+Overall, the comparative results across the evaluated distance intervals indicate that KT-QL generally achieved lower errors than 
+tabular Q-learning in trajectory accuracy, density representation, and fuel efficiency. When compared with traditional Dijkstra-based 
+methods, KT-QL tended to align more closely with actual AIS patterns while also identifying relatively more energy-efficient routes. 
+Against the DQN, KT-QL showed more stable and accurate performance across short- and medium-range scenarios and was able to 
+converge in long-range cases where DQN often failed. The relative advantages of KT-QL were most evident in extended trajectories 
+( ≥ 900 km), suggesting that RL approaches enriched with expert trajectory knowledge can provide particular benefits for optimizing 
+vessel routes over long distances.
+Fig. 4 highlights the trajectory-shape similarity trends across different distance intervals. The Dijkstra-based methods show a steep 
+upward trajectory as distance increases, indicating that route similarity deteriorates rapidly on longer voyages. Q-learning partially 
+mitigates this growth, but still exhibits a rising error curve. By contrast, KT-QL maintains a comparatively gentle slope and a stable 
+trajectory even in extended ranges, suggesting that experience-guided learning suppresses error accumulation over distance. DQN 
+shows irregular behavior, with higher initial errors and no convergence on longer voyages, underscoring its instability under sparse 
+maritime data conditions.
+Fig. 5 visualizes the variability in reproducing AIS-derived traffic density patterns. Dijkstra-based methods fluctuate irregularly, 
+reflecting their inability to consistently capture density preferences across different distances. Q-learning improves consistency, but 
+still demonstrates noticeable variation, particularly in medium-range voyages. KT-QL maintains the smoothest and most stable curve, 
+indicating that it generalizes traffic-density patterns effectively across all ranges. DQN occasionally achieves competitive results at 
+short and medium distances, but its instability and failure to converge in longer voyages highlight the limitations of deep RL when 
+applied to sparse AIS data.
+Fig. 6 depicts how error rates in fuel-consumption prediction evolve with voyage length. In shorter distances, all methods achieve 
+relatively low error rates, but as distance grows, Dijkstra-based methods show strong volatility, with sharp peaks in the mid- and long- 
+range intervals. Q-learning shows a smoother curve but with a gradual rise in error, while KT-QL maintains the flattest and most stable 
+trend, even in voyages exceeding 900 km. This stability suggests that KT-QL integrates route similarity with energy considerations 
+more effectively than the alternatives. In contrast, DQN produces higher variability and fails to converge in long-range cases, further 
+demonstrating the difficulty of applying deep RL in sparse, long-horizon maritime environments.
+Fig. 7 presents representative voyage cases across six distance intervals, illustrating the comparative performance of traditional 
+pathfinding algorithms and RL-based methods. In each subfigure (a – f), the top row corresponds to the Dijkstra-based variants — -
+Shortest Path, Shortest Moving Time, and Maximize Density Score — while the bottom row shows routes generated by the RL-based 
+models, namely Q-learning, KT-QL, and DQN. The blue lines represent actual vessel trajectories derived from AIS data, and the or -
+ange lines indicate model-predicted routes.
+As the voyage distance increases from (a) to (f), the contrast in trajectory behavior among the models becomes more evident, 
+particularly in terms of route realism and adaptability to operational constraints. For short-distance voyages ((a) – (b)), all models 
+generate routes that broadly follow the actual sailing paths. However, the Dijkstra-based algorithms tend to produce oversimplified, 
+geometrically optimal paths that disregard navigational realities such as turning restrictions, coastline curvature, and designated 
+Fig. 5. Comparison of DS MAPE by method and voyage distance.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+19 
+
+===== PAGE 20 =====
+traffic lanes. These simplified paths appear efficient in theory but fail to replicate the small-scale maneuvering and localized deviations 
+observed in real AIS trajectories. By contrast, RL-based models, especially KT-QL, exhibit smoother and more continuous trajectories 
+that better align with realistic vessel movement patterns.
+For longer-distance voyages ((c) – (f)), the limitations of traditional methods become more pronounced. The Shortest Path and 
+Shortest Moving Time algorithms frequently fail to reach the destination or produce unrealistic straight-line connections between 
+waypoints, as they cannot adapt to complex coastal geometries or sparse navigational data. Similarly, the Maximize Density Score 
+approach sometimes generates excessively elongated detours in low-traffic regions due to overreliance on historical AIS density. In 
+contrast, RL-based models exhibit greater stability and continuity across extended routes. Among them, KT-QL consistently achieves 
+the highest similarity to actual AIS tracks and demonstrates robust convergence, successfully completing routes even in long-distance 
+cases where conventional methods, and even the DQN model, often fail to reach the destination. The DQN model, while capable of 
+approximating general route tendencies, suffers from occasional search failures and unstable convergence in sparse or complex 
+navigation environments.
+Overall, KT-QL demonstrates superior capability to reproduce AIS-based vessel trajectories across all distance ranges, out -
+performing both Dijkstra-based algorithms and baseline RL models. Its ability to generalize from expert knowledge while maintaining 
+trajectory realism confirms the effectiveness of KT in RL for practical and reliable vessel route planning.
+Following the trajectory comparison in Fig. 7 , which analyzed the spatial characteristics of the predicted routes, Fig. 8 extends the 
+evaluation to fuel-consumption performance across six representative distance ranges (0 – 99 km to ≥ 900 km). The same experimental 
+dataset presented in Section 4.4 was used, but reformatted to emphasize the energy-use behavior under varying voyage lengths. For 
+clarity, the DQN model was excluded since it did not achieve stable convergence across all distance cases. The results show that 
+Dijkstra-based methods generally produce discontinuous or stepwise increases in fuel consumption, with deviations becoming more 
+pronounced in the long-distance segments ( ≥ 700 km). This trend reflects their optimization bias toward geometric distance or travel 
+time, overlooking the cumulative effects of propulsion energy over extended voyages. Even the Dijkstra (Maximize DS) approach, 
+while following historically dense traffic corridors, resulted in higher overall fuel use than the actual AIS routes, particularly in the 
+longer voyage ranges.
+In contrast, the reinforcement-learning-based models — Q-learning and KT-QL — generate smoother and more consistent fuel- 
+consumption profiles that closely follow the real operational patterns. Among them, KT-QL consistently demonstrates the lowest 
+variability and the closest alignment with the actual consumption curve across all distance ranges, indicating that its policy effectively 
+internalizes energy-efficient routing behaviors through KT.
+As voyage distance increases, the discrepancies in Dijkstra-based predictions become increasingly evident, whereas KT-QL 
+maintains stable and convergent performance. These results further validate the robustness of reinforcement-learning-based plan -
+ning in optimizing vessel energy consumption from short to long voyages, confirming KT-QL as an effective and energy-aware 
+framework for practical maritime route planning.
+Fig. 6. Comparison of fuel-consumption MAPE by method and voyage distance.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+20 
+
+===== PAGE 21 =====
+4.5. Results and discussions
+This section presents and discusses the results of the comparative experiments, which evaluated the proposed KT-QL algorithm 
+against conventional Q-learning, DQN, and traditional search methods. The evaluation focused on three primary metrics — Hausdorff 
+distance, DS, and fuel consumption — across seven distinct experimental cases designed to examine the impact of different reward and 
+penalty settings. The detailed results of these cases are presented in Table 8 .
+Fig. 7. Comparison between actual AIS trajectories and predicted routes by different models across representative distance ranges: (a) 0 – 99 km, (b) 
+100 – 299 km, (c) 300 – 499 km, (d) 500 – 699 km, (e) 700 – 899 km, (f) ≥ 900 km. Each subfigure (a – f) contains six panels comparing the actual AIS 
+trajectory (blue) with routes predicted by the Dijkstra-based and reinforcement RL models — Dijkstra (Shortest Path, Shortest Moving Time, 
+Maximize Density Score) in the top row, and Q-learning, KT-QL, and DQN in the bottom row.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+21 
+
+===== PAGE 22 =====
+4.5.1. Trajectory similarity (Hausdorff distance)
+Across all experimental cases, KT-QL achieved the highest geometric consistency with actual AIS routes. The model effectively 
+transferred navigational experience from historical data, allowing it to reproduce realistic route curvature and turning behavior even 
+in unseen regions. DQN, while showing smoother trajectories than tabular Q-learning in short and mid-range voyages, occasionally 
+exhibited instability in long-distance settings due to overestimation of value functions during neural approximation. These outcomes 
+indicate that KT-QL ’ s knowledge-transfer mechanism enhances spatial generalization while mitigating the convergence sensitivity 
+often observed in deep RL models.
+4.5.2. Traffic-Pattern alignment (DS)
+When evaluated against historical traffic density, KT-QL consistently produced trajectories that better aligned with high-frequency 
+maritime corridors. This suggests that the model not only learned from environmental rewards but also internalized implicit routing 
+conventions commonly followed by human navigators. Both Q-learning and DQN tended to excessively explore peripheral routes in 
+Fig. 8. Comparison of fuel-consumption profiles obtained from different route-planning models across representative distance ranges: (a) 0 – 99 km, 
+(b) 100 – 299 km, (c) 300 – 499 km, (d) 500 – 699 km, (e) 700 – 899 km, (f) ≥ 900 km. Each subfigure (a – f) shows the cumulative fuel consumption 
+(FOC
+ton
+) for the actual AIS route (black) and predicted routes by Dijkstra-based and RL models — Dijkstra (Shortest Path, Shortest Moving Time, 
+Maximize Density Score) in dashed lines, and Q-Learning, KT-QL, and DQN in solid lines.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+22 
+
+===== PAGE 23 =====
+sparsely traveled regions, leading to minor misalignments in dense traffic zones. By contrast, KT-QL balanced exploration and 
+exploitation through knowledge-guided initialization, improving its ability to follow realistic navigation patterns without explicit rule 
+constraints.
+4.5.3. Fuel consumption behavior
+Fuel-consumption analysis further confirmed the robustness of KT-QL. Compared with baseline methods, KT-QL generated energy- 
+efficient trajectories that closely matched the temporal fuel-use profiles observed in AIS data. DQN yielded moderate improvements in 
+short-distance scenarios but suffered from higher variance in extended voyages, resulting in less stable energy trends. As visualized in 
+Fig. 8 , Dijkstra-based methods generally produced stepwise or irregular increases in fuel consumption, with deviations becoming more 
+evident as voyage distance increased. This reflects their optimization bias toward geometric distance or travel time without accounting 
+for cumulative propulsion energy. In contrast, both Q-learning and KT-QL maintained smoother and more consistent fuel-consumption 
+profiles across all distance ranges. KT-QL, in particular, exhibited the closest alignment with the actual AIS-based consumption curve, 
+demonstrating its ability to internalize energy-aware decision policies through reinforcement of realistic maneuver sequences.
+4.5.4. Overall discussion
+Taken together, the results demonstrate that KT-QL surpasses both conventional and deep RL variants in producing accurate, stable, 
+and energy-efficient routes. Its advantage becomes most pronounced in long-distance navigation, where sparse rewards and complex 
+environmental dynamics typically degrade the performance of purely data-driven models. By leveraging expert knowledge extracted 
+from AIS trajectories during pre-training, KT-QL establishes a more informed policy foundation that accelerates convergence and 
+reduces variance across episodes. Consequently, KT-QL offers a practical framework for real-world maritime route planning, achieving 
+a balanced integration of strategic seamanship knowledge and adaptive learning capability.
+5. Conclusion
+5.1. Summary and contributions
+This study proposed the KT-QL framework to enhance vessel route planning by overcoming the limitations of traditional RL 
+methods. By embedding expert navigational knowledge extracted from AIS trajectories into the learning process, KT-QL addresses the 
+slow convergence and limited operational realism of standard tabular Q-learning and improves the policy stability often challenged in 
+deep RL (DQN) settings.
+Comprehensive experiments demonstrated that KT-QL consistently outperformed both conventional Q-learning and Dijkstra-based 
+search algorithms, and showed greater robustness than DQN in long-distance scenarios. The key findings and contributions are 
+summarized as follows:
+(1) Enhanced similarity to actual vessel routes : KT-QL produced trajectories with greater fidelity to actual vessel paths, reducing 
+the Hausdorff distance by approximately 39 % in the ≥ 900 km range, thus improving route realism.
+(2) Better alignment with maritime traffic patterns : KT-QL demonstrated a superior ability to capture principal navigation 
+corridors, indicating that the model was not merely replicating observed data but was actively learning to identify optimal, high- 
+density routes.
+(3) Enhanced Energy-efficiency and stability : KT-QL generally achieved lower fuel-consumption errors than Q-learning across 
+most voyage ranges, with improvements becoming more pronounced in medium- to long-distance scenarios. As summarized in 
+Table 9, KT-QL reduced fuel-consumption error by approximately 37 % (RMSE) and 48 % (MAPE) compared with Q-learning in long- 
+distance voyages ( ≥ 900 km). This demonstrates that the proposed model effectively learns energy-efficient navigation policies, 
+particularly for extended voyages where conventional Q-learning tends to diverge.
+These findings suggest that KT-QL effectively integrates expert maritime knowledge with RL, leading to policies that are more 
+realistic and energy-efficient than conventional methods. The proposed framework advances data-driven route-planning research and 
+may serve as a foundation for future development of adaptive, fuel-efficient decision-support systems in maritime operations.
+5.2. Theoretical and managerial implications
+Theoretically, this study contributes to RL research by demonstrating how KT can enhance model performance in complex and 
+uncertain environments. The KT-QL framework illustrates the potential of integrating expert domain knowledge to improve 
+convergence stability and policy generalization, thereby extending the scope of knowledge-driven RL beyond controlled simulations. 
+These findings open new directions for exploring hybrid learning paradigms that combine human expertise and autonomous adap -
+tation in sequential decision-making problems.
+From a managerial perspective, KT-QL provides meaningful insights for maritime operations and route-planning practice. By 
+producing more realistic and energy-efficient trajectories that align with existing navigation corridors, the approach supports data- 
+driven decision-making toward more sustainable and cost-effective fleet management. Although further validation in operational 
+settings is required, KT-QL may serve as a foundational concept for developing intelligent decision-support systems aimed at improving 
+voyage planning and energy management in maritime logistics.
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+23 
+
+===== PAGE 24 =====
+5.3. Limitations and future research directions
+Although the proposed KT-QL model demonstrated substantial improvements, it has some limitations that should be addressed in 
+future research: 
+• Environmental and regulatory factors : The current model does not explicitly consider dynamic environmental or regulatory 
+conditions such as ocean currents, weather disturbances, port congestion, piracy zones, or emission control areas. Moreover, 
+decarbonization-related constraints — such as speed limits or fuel-emission policies — were not embedded into the reward 
+structure. Future studies should extend the state-action space to reflect these dynamic and policy-driven elements, for example, by 
+penalizing entries into restricted zones or modeling regulatory compliance as a state-dependent reward. Incorporating such factors 
+would enhance both the safety and regulatory robustness of the trajectory-planning process.
+• Generalizability : The experiments were conducted under specific geographical and vessel conditions. To ensure robustness, 
+broader validation across multiple maritime regions, vessel classes, and varying traffic densities is needed. Such cross-domain 
+evaluation would clarify how effectively the KT-QL framework generalizes to different operational contexts.
+• Real-time adaptability : The present framework relies on historical AIS data and offline training. Future research should develop 
+continuous or online learning mechanisms that adapt to real-time AIS streams, weather updates, and port-state information. 
+Combining RL with streaming data assimilation could enable dynamic trajectory updates responsive to evolving maritime 
+environments.
+To strengthen the theoretical foundation and practical applicability of KT-QL, several promising extensions can be envisioned: 
+• Multi-vessel coordination: Extending the framework to cooperative routing could improve fleet-level traffic management 
+and congestion avoidance.
+• Simulator and field validation : Testing the model in high-fidelity maritime simulators and controlled sea trials would provide 
+empirical evidence of operational feasibility and safety.
+• Integration of environmental and policy data : Embedding real-time weather, wave, current, and decarbonization constraints 
+directly into the learning process would enhance both adaptability and compliance.
+By pursuing these directions, KT-QL can evolve into a robust, adaptive, and regulation-aware route-planning framework that 
+bridges the gap between methodological innovation and practical maritime operation.
+CRediT authorship contribution statement
+Hyunju Lee: Writing – review & editing, Writing – original draft, Funding acquisition, Conceptualization. Kikun Park: Meth -
+odology, Formal analysis, Conceptualization. Hyerim Bae: Writing – review & editing, Supervision, Project administration.
+Declaration of competing interest
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to 
+influence the work reported in this paper.
+Acknowledgements
+This work was supported by the Development of integrated energy control system for autonomous ships [grant no. 20016140] 
+funded by the Ministry of Trade, Industry & Energy (MOTIE) and Korea Planning & Evaluation Institute of Industrial Technology 
+(KEIT).
+References
+Ly, A.O., Akhloufi, M., 2021. Learning to drive by imitation: an overview of deep behavior cloning methods. IEEE Trans. Intell. Veh. 6, 195 – 209. https://doi.org/ 
+10.1109/TIV.2020.3002505 .
+Aini, A.N., Dewantari, O.A., Mandala, D.P.A., Bisri, M.B.F., 2023. An enhanced earthquake risk analysis using H3 spatial indexing. IOP Conf. Ser. Earth Environ. Sci. 
+1245, 012014. https://doi.org/10.1088/1755-1315/1245/1/012014 .
+Alessandrini, A., Mazzarella, F., Vespe, M., 2019. Estimated time of arrival using historical vessel tracking data. IEEE Trans. Intell. Transp. Syst. 20, 7 – 15. https://doi. 
+org/10.1109/TITS.2017.2789279 .
+Alvarez, A., Caiti, A., Onken, R., 2004. Evolutionary path planning for autonomous underwater vehicles in a variable ocean. IEEE J. Ocean. Eng. 29, 418 – 429. https:// 
+doi.org/10.1109/JOE.2004.827837 .
+Atos, 2024. The maritime shipping sector: facing the challenges of decarbonization and digitalization. https://atos.net/wp-content/uploads/2024/10/Atos-WWF- 
+Executive-Summary_Maritime-Shipping.pdf .
+Barreto, A., Dabney, W., Munos, R., Hunt, J.J., Schaul, T., Hasselt, H.V., Silver, D., 2017. Successor features for transfer in reinforcement learning. https://doi.org/10. 
+48550/arXiv.1606.05312 .
+Bharadhwaj, H., Wang, Z., Bengio, Y., Paull, L., 2019. A data-efficient framework for training and sim-to-real transfer of navigation policies. In: 2019 International 
+Conference on Robotics and Automation (ICRA). Presented at the 2019 International Conference on Robotics and Automation (ICRA), pp. 782 – 788. https://doi. 
+org/10.1109/ICRA.2019.8794310 .
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+24 
+
+===== PAGE 25 =====
+Chen, C., Chen, X.-Q., Ma, F., Zeng, X.-J., Wang, J., 2019. A knowledge-free path planning approach for smart ships based on reinforcement learning. Ocean Eng. 189, 
+106299. https://doi.org/10.1016/j.oceaneng.2019.106299 .
+Chen, X., Hu, R., Luo, K., Wu, H., Biancardo, S.A., Zheng, Y., Xian, J., 2025. Intelligent ship route planning via an A* search model enhanced double-deep Q-network. 
+Ocean Eng. 327, 117268. https://doi.org/10.1016/j.oceaneng.2025.117268 .
+Djouani, K., Hamam, Y., 1995. Minimum time-energy trajectory planning for automatic ship berthing. IEEE J. Ocean. Eng. 20 (1), 4 – 12. https://doi.org/10.1109/ 
+48.380251 .
+Guo, S., Zhang, X., Zheng, Y., Du, Y., 2020. An autonomous path planning model for unmanned ships based on deep reinforcement learning. Sensors 20 (2), 426. 
+https://doi.org/10.3390/s20020426 .
+Hexeberg, S., Flåten, A.L., Eriksen, B.-O.H., Brekke, E., 2017. AIS-based vessel trajectory prediction. In Proceedings of the 20th International Conference on 
+Information Fusion (Fusion), Xi ’ an, China, pp. 1 – 8. IEEE. https://doi.org/10.23919/ICIF.2017.8009762 .
+Latinopoulos, C., Zavvos, E., Kaklis, D., Leemen, V., Halatsis, A., 2025. Marine voyage optimization and weather routing with deep reinforcement learning. J. Mar. Sci. 
+Eng. 13 (5), 902. https://doi.org/10.3390/jmse13050902 .
+Lazaric, A., 2012. Transfer in reinforcement learning: a framework and a survey. In: Wiering, M., van Otterlo, M. (Eds.), Reinforcement Learning: State-of-the-Art. 
+Springer, Berlin, Heidelberg, pp. 143 – 173. https://doi.org/10.1007/978-3-642-27645-3_5 .
+Lee, Z.E., Zhang, K.M., 2021. Generalized reinforcement learning for building control using behavioral cloning. Appl. Energy 304, 117602. https://doi.org/10.1016/j. 
+apenergy.2021.117602 .
+Lei, P.-R., 2020. Mining maritime traffic conflict trajectories from a massive AIS data. Knowl. Inf. Syst. 62, 259 – 285. https://doi.org/10.1007/s10115-019-01355-0 .
+International Maritime Organization (IMO), 2025. IMO ’ s work to cut GHG emissions from ships [WWW Document]. https://www.imo.org/en/mediacentre/ 
+hottopics/pages/cutting-ghg-emissions.aspx (accessed 8.1.25).
+Lin, Y.-H., Fang, M.-C., Yeung, R.W., 2013. The optimization of ship weather-routing algorithm based on the composite influence of multi-dynamic elements. Appl. 
+Ocean Res.. 43, 184 – 194. https://doi.org/10.1016/j.apor.2013.07.010 .
+Liu, J., Shi, G., Zhu, K., 2020. Online multiple outputs least-squares support vector regression model of ship trajectory prediction based on automatic information 
+system data and selection mechanism. IEEE Access 8, 154727 – 154745. https://doi.org/10.1109/ACCESS.2020.3018749 .
+Mnih, V., Kavukcuoglu, K., Silver, D., Rusu, A.A., Veness, J., Bellemare, M.G., 2015. Human-level control through deep reinforcement learning. Nature 518 (7540), 
+529 – 533. https://doi.org/10.1038/nature14236 .
+Moradi, M.H., Brutsche, M., Wenig, M., Wagner, U., Koch, T., 2022. Marine route optimization using reinforcement learning approach to reduce fuel consumption and 
+consequently minimize CO2 emissions. Ocean Eng. 259, 111882. https://doi.org/10.1016/j.oceaneng.2022.111882 .
+Nguyen, D., Fablet, R., 2024. A transformer network with sparse augmented data representation and cross entropy loss for AIS-based vessel trajectory prediction. IEEE 
+Access 12, 21596 – 21609. https://doi.org/10.1109/ACCESS.2024.3349957 .
+Niu, H., Lu, Y., Savvaris, A., Tsourdos, A., 2018. An energy-efficient path planning algorithm for unmanned surface vehicles. Ocean Eng. 161, 308 – 321. https://doi. 
+org/10.1016/j.oceaneng.2018.01.025 .
+Parisotto, E., Ba, J.L., Salakhutdinov, R., 2016. Actor-mimic: deep multitask and transfer reinforcement learning. https://doi.org/10.48550/arXiv.1511.06342 .
+Park, K., Sim, S., Bae, H., 2021. Vessel estimated time of arrival prediction system based on a path-finding algorithm. Mar. Transp. Res. 2, 100012. https://doi.org/ 
+10.1016/j.martra.2021.100012 .
+Perera, L.P., Oliveira, P., Guedes Soares, C., 2012. Maritime traffic monitoring based on vessel detection, tracking, state estimation, and trajectory prediction. IEEE 
+Trans. Intell. Transp. Syst. 13 (3), 1188 – 1200. https://doi.org/10.1109/TITS.2012.2187282 .
+Qiao, S., Shen, D., Wang, X., Han, N., Zhu, W., 2015. A self-adaptive parameter selection trajectory prediction approach via hidden Markov models. IEEE Trans. Intell. 
+Transp. Syst. 16 (1), 284 – 296. https://doi.org/10.1109/TITS.2014.2331758 .
+Sharif, N., R ¨onnqvist, M., Cordeau, J.F., Audy, J.F., Warya, G., Ngo, T., 2024. Multi-objective vessel routing problems with safety considerations: a review. Marit. 
+Transp. Re 7, 100122. https://doi.org/10.1016/j.martra.2024.100122 .
+Shelmerdine, R.L., 2015. Teasing out the detail: how our understanding of marine AIS data can better inform industries, developments, and planning. Mar. Policy 54, 
+17 – 25. https://doi.org/10.1016/j.marpol.2014.12.010 .
+Sivaraj, S., Rajendran, S., 2022. Heading control of a ship based on deep reinforcement learning (RL). OCEANS 2022, 1 – 6. https://doi.org/10.1109/ 
+OCEANSChennai45887.2022.9775236 .
+Taylor, M.E., Stone, P., 2009. Transfer learning for reinforcement learning domains: a survey. J. Mach. Learn. Res. 10, 1633 – 1685 .
+Teh, Y., Bapst, V., Czarnecki, W.M., Quan, J., Kirkpatrick, J., Hadsell, R., Heess, N., Pascanu, R., 2017. Distral: robust multitask reinforcement learning. In: Guyon, I., 
+Luxburg, U.V., Bengio, S., Wallach, H., Fergus, R., Vishwanathan, S., Garnett, R. (Eds.), Advances in Neural Information Processing Systems. Curran Associates, 
+Inc .
+Uber Technologies, Inc, 2019. H3: uber ’ s hexagonal hierarchical spatial index [WWW Document]. Uber Blog. https://www.uber.com/en-EG/blog/h3/ (accessed 
+8.1.25).
+Vaidheeswaran, V., Jayakody, D., Mulay, S., Lo, A., Alam, M., Spadon, G., 2025. Goal-conditioned reinforcement learning for data-driven maritime navigation. arXiv 
+preprint arXiv:2509.01838. https://arxiv.org/abs/2509.01838 .
+Yan, R., Wang, S., Zhen, L., Laporte, G., 2021. Emerging approaches applied to maritime transport research: past and future. Commun. Transp. Res. 1, 100011. 
+https://doi.org/10.1016/j.commtr.2021.100011 .
+Yin, H., Pan, S., 2017. Knowledge transfer for deep reinforcement learning with hierarchical experience replay. In: Proc. AAAI Conf. Artif. Intell, 31. https://doi.org/ 
+10.1609/aaai.v31i1.10733 .
+Yoo, B., Kim, J., 2016. Path optimization for marine vehicles in ocean currents using reinforcement learning. J. Mar. Sci. Technol. 21, 334 – 343. https://doi.org/ 
+10.1007/s00773-015-0355-9 .
+Zhang, J., Springenberg, J.T., Boedecker, J., Burgard, W., 2017. Deep reinforcement learning with successor features for navigation across similar environments. In: 
+2017 IEEE/RSJ Int. Conf. Intell. Robots and Syst. (IROS), pp. 2371 – 2378. https://doi.org/10.1109/IROS.2017.8206049 .
+Zhang, S., Wang, L., Zhu, M., Chen, S., Zhang, H., Zeng, Z., 2021. A bi-directional LSTM ship trajectory prediction method based on attention mechanism. In 2021 
+IEEE 5th Advanced Information Technology, Electronic and Automation Control Conference (IAEAC) (pp. 1987 – 1993). Chongqing, China: IEEE. https://doi.org/ 
+10.1109/IAEAC50856.2021.9391059 .
+Zhang, X., Fu, X., Xiao, Z., Xu, H., Qin, Z., 2022. Vessel trajectory prediction in maritime transportation: current approaches and beyond. IEEE Trans. Intell. Transp. 
+Syst. 23, 19980 – 19998. https://doi.org/10.1109/TITS.2022.3192574 .
+H. Lee et al.                                                                                                                                                                                                             Maritime Transport Research 9 (2025) 100142 
+25 

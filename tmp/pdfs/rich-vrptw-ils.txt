@@ -1,0 +1,1701 @@
+===== PAGE 1 =====
+An iterated local search based approach for a real rich vehicle routing 
+problem with time windows
+Andr ´es Felipe Romero Silva
+a
+, Alejandra Tabares Pozos
+b
+, David Alvarez Martinez
+b
+,  
+John Willmer Escobar
+c , *
+a
+TUL SAS, Departamento de Ingeniería Industrial, Universidad de los Andes, Bogot ´a, Colombia, Bogot ´a 110110 Cundinamarca, Colombia
+b
+Departamento de Ingeniería Industrial, Universidad de los Andes, Bogot ´a, Colombia, Bogot ´a 110110 Cundinamarca, Colombia
+c
+Department of Accounting and Finance, Universidad del Valle, Cali, Cali 760001 Valle del Cauca, Colombia
+ARTICLE INFO
+Keywords:
+Hybrid algorithm
+Decision support systems
+Iterative local search
+Rich vehicle routing problem
+Set partitioning
+ABSTRACT
+The vehicle routing problem with multiple real constraints is one of the leading logistics challenges for 
+technology-based companies. Despite being a classic and well-studied real-world routing problem, only a few 
+companies have implemented algorithms to solve it entirely and automatically. Based on a real case study of a 
+technology-based company, this paper proposes a solution to an asymmetric close-open mixed vehicle routing 
+problem that considers capacity constraints, heterogeneous fleet, time windows, and computational and oper -
+ational implementation constraints. A hybrid algorithm is proposed, which combines an iterative local search 
+strategy with a set-partitioning problem strategy, utilizing a computing architecture that meets all the constraints 
+to solve the considered problem. Benchmarking was conducted using classic instances from the literature and 
+actual instances from the company to demonstrate the performance of the proposed methodology. The solutions 
+for the company ́ s instances have an average gap of 9% compared with the upper bound obtained via the related 
+knapsack problem. In contrast, the results for classical instances have an average gap of 8% compared with the 
+best-found solution in the literature. Moreover, the algorithm and the architecture created are already used in the 
+company ’ s day-to-day operations, validating the efficiency and effectiveness of the proposed work.
+1. Introduction
+In the rapidly evolving landscape of modern logistics, the vehicle 
+routing problem (VRP) remains a critical lever for cost optimization. 
+Transportation costs account for more than 50 % of total logistics costs 
+in regions such as Latin America (12 – 14 % of GDP) and developed 
+economies (7 – 8 % of GDP) ( Dan, 2021; Departamento Nacional de 
+Planeaci ´on, 2021 ). While traditional VRP formulations focus on 
+simplified scenarios, industrial applications demand solutions that 
+consider asymmetric close-open mixed routes, heterogeneous fleets, 
+capacity limits, time windows, and computational feasibility. These 
+solutions are real challenges where academic advancements often 
+diverge from operational realities. This gap persists despite decades of 
+research, leaving many technology-driven firms reliant on fragmented, 
+manual planning or generic SaaS tools that sacrifice quality for speed. 
+Drawing from a real-world case study, this work bridges theory and 
+practice by proposing a hybrid metaheuristic — combining iterative local 
+search (ILS) with set-partitioning optimization — embedded within a 
+scalable computational architecture. Our approach addresses multifac -
+eted routing constraints and integrates critical implementation factors 
+such as horizontal scalability and software compatibility within a deci -
+sion support system validated in daily operations. Benchmarking against 
+classical instances and company-specific data reveals competitive gaps 
+of 6 – 8 % versus theoretical bounds. Moreover, the deployed system now 
+drives measurable cost reductions, demonstrating that rigorous algo -
+rithms can be effectively transitioned into industrial tools without 
+compromising their real-world applicability.
+The VRP, in its canonical form, seeks to minimize transportation 
+costs by designing routes for a given fleet of vehicles serving 
+geographically dispersed customers. However, real-world logistics 
+operations — particularly in technology-centric enterprises — require ex -
+tensions based on combinations of different problems, such as capaci -
+tated Vehicle Routing Problem (CVRP) ( Bernal et al., 2018; Linfati and 
+Escobar, 2018 ), Vehicle Routing Problem with Time Windows (VRPTW) 
+* Corresponding author.
+E-mail addresses: af.romero11@uniandes.edu.co (A.F. Romero Silva), a.tabaresp@uniandes.edu.co (A. Tabares Pozos), d.alvarezm@uniandes.edu.co (D. Alvarez 
+Martinez), john.wilmer.escobar@correounivalle.edu.co (J.W. Escobar). 
+Contents lists available at ScienceDirect
+Computers & Industrial Engineering
+journal homepag e: www.else vier.com/loc ate/caie
+https://doi.org/10.1016/j.cie.2025.111422
+Received 26 December 2022; Received in revised form 21 July 2025; Accepted 23 July 2025  
+Computers & Industrial Engineering 208 (2025) 111422 
+Available online 30 July 2025 
+0360-8352/© 2025 The Author(s). Published by Elsevier Ltd. This is an open access article under the CC BY-NC-ND license ( http://creativecommons.org/licenses/by- 
+nc-nd/4.0/ ). 
+
+===== PAGE 2 =====
+( Desrochers et al., 1992; Pecin et al., 2017 ), and Heterogeneous Fleet 
+Vehicle Routing Problem (HVRP) ( Escobar et al., 2017; Puenay ´an et al., 
+2014 ). These “ Rich VRP ” variants ( Caceres-Cruz et al., 2014; Schmid 
+et al., 2013; Lahyani et al., 2015 ) introduce layers of complexity, 
+considering operational constraints such as pickup/delivery coordina -
+tion (VRPPD) ( Ai and Kachitvichyanukul, 2009; Subramanian et al., 
+2010 ), dynamic demand, and multidepot configurations. Despite their 
+academic prevalence, few solutions holistically address the interplay of 
+these constraints while remaining computationally tractable for real- 
+time decision-making. SMEs often resort to suboptimal workarounds, 
+such as geographic zoning or manual route partitioning, which inflate 
+costs and introduce artificial operational bottlenecks.
+A persistent chasm exists between algorithmic innovation and in -
+dustrial adoption. Exact methods (e.g., branch-and-bound) struggle with 
+scalability, whereas heuristic and metaheuristic approaches — although 
+faster — often neglect implementation barriers such as legacy system 
+integration, programming language limitations, and cloud-based hori -
+zontal scalability. Consequently, many firms turn to third-party SaaS 
+platforms, which often deliver generic solutions that are ill-suited to 
+specialized routing needs. This paper directly addresses these challenges 
+by presenting a hybrid framework tailored to the vehicle routing prob -
+lem of a technology company, considering the asymmetric costs of open- 
+close routes, capacity constraints, a heterogeneous fleet, time windows, 
+and computational and operational constraints for real-world imple -
+mentation. The methodology harmonizes an ILS metaheuristic, which 
+refines solutions through perturbation and local search, with a set- 
+partitioning model to allocate routes across a mixed fleet optimally. 
+The algorithm is encapsulated within a microservice architecture 
+designed for low-latency responses and seamless integration with the 
+company ’ s existing ERP systems.
+The primary contributions of this work are the following: 
+• ILS ’ s explorative strength is combined with set-partitioning ’ s preci -
+sion to handle time windows, heterogeneous fleets, and asymmetric 
+travel costs.
+• Embeds computational constraints — including Python-to-Go inter -
+operability, containerized deployment, and horizontal scaling — into 
+the algorithmic architecture, ensuring real-world usability.
+• Benchmarks against classical VRPTW instances (e.g., Solomon 
+datasets) and proprietary company data demonstrate an 8 % average 
+gap compared to literature benchmarks and a 6 % gap against a 
+theoretical upper bound derived from a related knapsack 
+formulation.
+• Publishes anonymized real-world instances to foster academic- 
+industry collaboration on constrained routing problems.
+• The multi-pass approach, which iteratively refines the current solu -
+tion using the SP scheme, requires more computation time but yields 
+a better solution than a single-pass scheme. Indeed, the muti-pass 
+approach can be more easily adapted to RVRP domains and con -
+straints. Each pass can be tailored to address a specific aspect of the 
+problem, making it easier to adjust the heuristic as circumstances 
+change.
+This paper also quantifies the “ adaptation cost ” of aligning academic 
+algorithms with operational realities — a metric seldom explored in the 
+literature. For example, while the proposed algorithm ’ s 6 – 8 % perfor -
+mance gap may appear modest, it represents a 23 % cost reduction 
+compared with the company ’ s prior manual planning processes, vali -
+dating the trade-off between optimality and practicality.
+The remainder of this paper is organized as follows: Section 2 re -
+views the relevant literature on Rich Vehicle Routing Problems (RVRPs) 
+and hybrid metaheuristics. Section 3 formalizes the problem and details 
+the algorithm and architectural design. Section 4 analyzes the compu -
+tational results, and Section 5 concludes with implications for practi -
+tioners and researchers.
+2. Literature review
+The vehicle routing problem (VRP) is a fundamental NP-hard prob -
+lem in combinatorial optimization. Over the past few decades, numerous 
+variants of VRP have been defined, incorporating constraints such as 
+time windows, heterogeneous fleets, and multiple depots. Comprehen -
+sive surveys and taxonomies of VRP variants are available in the liter -
+ature ( Braekers et al., 2016; Konstantakopoulos et al., 2022; Elshaer and 
+Awad, 2020 ). In practice, VRPs with realistic sizes are solved predomi -
+nantly via heuristic and metaheuristic methods, as exact algorithms 
+struggle with instances beyond relatively small sizes. Indeed, exact 
+methods are not able to solve VRP instances with more than approxi -
+mately 150 customers (see Subramanian et al. (2013) ). However, this 
+barrier is significantly pushed. Recently proposed branch-cut-and-price 
+algorithms solved much larger instances to prove optimality, with up to 
+approximately 200 – 360 customers ( Subramanian et al., 2013; Penna 
+et al., 2019; Pecin et al., 2017; Costa et al., 2019 ). However, their 
+implementation for real-world practical problems is challenging, which 
+hinders the efficient solution of VRP problems ( Penna et al., 2019; Rojas- 
+Saavedra et al., 2023; Osorio-Mora et al., 2023 ).
+For example, Pecin et al. (2017) developed an improved branch-cut- 
+and-price (BCP) algorithm that optimally solved all classical CVRP 
+benchmark instances (up to 199 customers) and even certain larger in -
+stances with up to 360 customers that were previously considered 
+intractable by exact methods. Similarly, a recent survey by Costa et al. 
+(2019) noted that state-of-the-art exact methods attained optimal solu -
+tions for CVRP instances with over 300 customers and VRP with time 
+window (VRPTW) instances with approximately 200 customers. These 
+breakthroughs overturn the earlier perception ( Subramanian et al., 
+2013 ). The VRP benchmark repository consolidates many of these 
+optimal solutions and instances ( CVRPLIB, “ Capacitated Vehicle Rout -
+ing Problem Library. ” Accessed: Mar. 24, 2025 ). Despite this progress, 
+exact approaches for very large or more complex VRP variants remain 
+limited by exponential growth in complexity, underscoring the 
+continued importance of heuristic and hybrid methods for rich VRPs.
+RVRPs refer to vehicle routing problems that combine multiple 
+realistic attributes or constraints within a single problem formulation 
+( Penna et al., 2019 ). An RVRP integrates several features simulta -
+neously, such as a heterogeneous fleet, time windows, and pickup- 
+delivery or other constraints, within one problem. The RVRPs are 
+more closely modeled in real-world logistics but are markedly more 
+complex due to the combination of constraints. RVRPs have been a focus 
+of active research in recent years. The literature evolved a taxonomy for 
+VRPs with multiple attributes, sometimes even defining a “ rich ” VRP. 
+The reader is referred to detailed reviews by ( Caceres-Cruz et al., 2014; 
+Schmid et al., 2013; Lahyani et al., 2015 ) for overviews of various rich 
+VRP formulations and early solution approaches. Broadly, these surveys 
+highlight that earlier research often addressed each new variant in 
+isolation, for example, by developing specialized algorithms for VRP 
+with backhauls, split deliveries, or site-dependent constraints, leading to 
+a proliferation of variant-specific methods.
+In the context of RVRPs, significant advancements in optimization 
+methodologies have been proposed to address the complex challenges of 
+urban logistics. Mathematical formulations for rich vehicle routing 
+problems have been developed by ( Rieck and Zimmermann, 2010; 
+Masmoudi et al., 2013; Souza Neto and Pureza, 2016; Ambrosino and 
+Cerrone, 2022 ). Mixed-integer linear programming for a rich vehicle 
+routing problem (RVRP) considering loading and unloading constraints 
+was studied by ( Rieck and Zimmermann, 2010 ). Masmoudi et al. (2013)
+propose a mathematical model for an RVRP in an e-commerce company, 
+considering various aspects. Souza Neto and Pureza (2016) propose a 
+mathematical formulation that represents the delivery operations of 
+large volumes of products in dense urban areas. A mixed-integer pro -
+gramming model and an experimental algorithm are presented for 
+validating an RVRP in a city logistic context ( Ambrosino and Cerrone, 
+2022 ). The authors consider a problem faced by a logistics company that 
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+2 
+
+===== PAGE 3 =====
+must define the optimal distribution strategy to achieve efficient vehicle 
+utilization and minimize transportation costs while serving customers 
+with varying priority demands within a specified planning horizon. 
+Early column generation approaches for RVRPs were studied by ( Ceselli 
+et al., 2009 ) and ( Oppen et al., 2010 ). Finally, Yang et al. (2020) pro -
+posed a cooperative rich vehicle routing problem (CoRVRP) among 
+three typical logistics providers in the last-mile logistics industry in rural 
+areas.
+A trajectory-based metaheuristic for RVRPs was proposed by 
+( Amorim et al., 2014 ) and ( Alcaraz et al., 2019 ). Amorim et al. (2014)
+focused on a daily RVRP faced by a Portuguese food distribution com -
+pany. The authors propose an adaptive large neighborhood search 
+framework for solving various vehicle routing problems. Alcaraz et al. 
+(2019) address an RVRP characterized by the following attributes: long- 
+haul transport, driver hour regulation, incompatibility among goods, 
+multiple depots and pickup locations, heterogeneous vehicles, time 
+windows, and outsourcing decisions for last-mile delivery. A general 
+variable neighborhood search strategy for a company ’ s fleet manage -
+ment system in the Canary Islands was developed by ( De Armas et al., 
+2015 ). De Armas and Meli ´an-Batista (2015) proposed a variable 
+neighborhood search (VNS) for solving a dynamic rich vehicle routing 
+problem with time windows (DRVRP). Several real-world constraints 
+are considered, including a heterogeneous fleet of vehicles, multiple soft 
+time windows, and customer priorities. A combination of variable 
+neighborhood search and tabu search for the distribution of goods, 
+considering real-life features such as time windows, capacity con -
+straints, compatibility between orders and vehicles, and the maximum 
+number of orders per vehicle, among others, was proposed in ( Sicilia 
+et al., 2016 ).
+Population-based strategies have been proposed by ( Osaba et al., 
+2017; Rabbouch et al., 2021; Lesch et al., 2022 ). A real-world newspaper 
+distribution problem with a recycling policy was addressed in ( Osaba 
+et al., 2017 ). This problem considers constraints such as simultaneous 
+pickup and deliveries, variable costs, and forbidden paths. A discrete 
+firefly algorithm (DFA) has been developed for this problem. A genetic 
+algorithm (GA) based approach was proposed to address the RVRP 
+( Rabbouch et al., 2021 ). Lesch et al. (2022) incorporated the relevant 
+real-world constraints and requirements for an RVRP. The authors 
+propose a two-stage strategy and a timeline algorithm for time windows 
+and pause times and apply a genetic algorithm (GA) and ant colony 
+optimization (ACO) to find optimal solutions. Finally, other algorithms 
+for solving RVRP, such as a fix-and-optimize matheuristic ( Marques 
+et al., 2020 ) and a biased-randomized heuristic ( Tordecilla et al., 2021 ), 
+have demonstrated their efficiency for large-scale problems. Finally, a 
+review of the RVRP can be found in ( Caceres-Cruz et al., 2014 ). Table 1
+summarizes some relevant contributions to the state-of-the-art problems 
+based on the VRP by different authors, which are essential for the pro -
+posed hybrid algorithm for the RVRP.
+The main modules used for the proposed approach have been studied 
+previously. The optimal splitting procedure has been considered for a 
+variant of the VRP by ( Prins, 2004 ). This method was studied early by 
+( Beasley, 1983 ). In this step, the first phase computes a giant TSP tour 
+for all customers by relaxing the vehicle capacity and maximum tour 
+length. The splitting procedure is applied to an auxiliary graph. On the 
+other hand, the implementation of building a giant traveling salesman 
+problem (TSP) tour has been considered for variants of the vehicle 
+routing problem, including the nearest neighbor heuristic ( Escobar 
+et al., 2013; Escobar et al., 2014; Escobar et al., 2014 ). Route-first 
+Cluster-second methods construct a comprehensive tour that covers all 
+customers and then split it into feasible trips. A review of works that 
+consider this method for various VRP problems has been published by 
+( Prins et al., 2014 ). The Set Partitioning (SP) approach has been suc -
+cessfully applied by an exact method available for the CVRP ( Baldacci 
+et al., 2008 ), as developed by Fukasawa et al. ( Fukasawa et al., 2006 ). 
+This method combines a branch-and-cut with the Set Partitioning (SP) 
+problem. The columns of the SP correspond to the set of q-routes that 
+contain the set of valid CVRP routes. Since the resulting formulation has 
+an exponential number of both columns and rows, this leads to column 
+and cut generation for computing the proposed approach. Additionally, 
+( Bianco et al., 1994 ) addresses the Multiple Depot Vehicle and Sched -
+uling Problem (MD-VSP), formulating it as a Set Partitioning problem 
+with side constraints (SP).
+3. Materials and methods
+3.1. Problem description
+TÜL is an emerging company (start-up) dedicated to marketing 
+products for hardware, construction materials, tools, and finish prod -
+ucts. These products are heavy, bulky, extra-long, and sometimes 
+Table 1 
+Main contribution of papers related to the vehicle routing problem.
+Authors Title Contribution
+Dantzig et al. (
+Dantzig et al., 
+1954 )
+Solution of a large-scale 
+traveling salesman problem
+VRP problem as an extension 
+of the Traveling Salesman 
+problem (TSP).
+Golden et al. (
+Golden et al., 
+1984 )
+Implementing vehicle 
+routing algorithms
+Constructive solution 
+methodology based on 
+routing-first and grouping- 
+later.
+Christofides et al. (
+Christofides 
+et al., 1981 )
+Exact algorithms for the 
+vehicle routing problem, 
+based on spanning tree and 
+shortest path relaxations
+Algorithms and exact 
+formulations to solve VRP 
+problems up to 25 
+customers.
+Golden et al. (
+Golden et al., 
+1977 )
+The fleet size and mix 
+vehicle routing problem
+VRP with heterogeneous 
+fleet and heuristic 
+algorithms for its solution in 
+the unlimited availability 
+variant.
+Laporte et al. (
+Laporte et al., 
+1986 )
+An exact algorithm for the 
+asymmetrical capacitated 
+vehicle routing problem
+Exact solution for the variant 
+of the asymmetric VRP 
+(AVRP).
+Taillard ( Taillard, 
+1993 )
+Parallel iterative search 
+methods for vehicle routing 
+problems
+Generation of subproblems 
+by using a decomposition 
+method based on random 
+customer partitions to solve 
+them independently.
+Baldacci, et al., (
+Baldacci et al., 
+2008 )
+An exact algorithm for the 
+vehicle routing problem 
+based on the set partitioning 
+formulation with additional 
+cuts
+The exact solution of the 
+CVRP is generated by 
+generating columns and cuts 
+known as Set-Partitioning 
+(SP).
+Subramanian (
+Subramanian, 
+2008 )
+Metaheurística Iterated 
+Local Search aplicada ao 
+Problema de Rotetamento de 
+Veículos com Coleta e 
+Entrega Simult ȃ nea
+Application of the Iterative 
+Local Search (ILS) 
+metaheuristic in routing 
+problems.
+Subramanian (
+Vidal et al., 
+2013 )
+Heuristic, Exact and Hybrid 
+Approaches for Vehicle 
+Routing Problems
+Compilation of VRP variants, 
+best solution approximations 
+and implementation of the 
+ILS-RVND-SP algorithm.
+Vidal et al. ( Vidal 
+et al., 2014 )
+Heuristics for multiattribute 
+vehicle routing problems: A 
+survey and synthesis
+Effective design of heuristics 
+and matheuristic for MAVRP 
+variants.
+Vidal et al. ( Uchoa 
+et al., 2017 )
+A unified solution 
+framework for 
+multiattribute vehicle 
+routing problems
+Unified methodology for 
+local search and route 
+evaluation operators.
+Uchoa et al ( Vidal 
+et al., 2020 )
+New Benchmark Instances 
+for the Capacitated Vehicle 
+Routing Problem
+Compilation of classic 
+instances and proposal of 
+new instances to evaluate 
+different VRP algorithms.
+Vidal et al. ( Vidal, 
+2022 )
+A concise guide to existing 
+and emerging vehicle 
+routing problem variants
+New ways of evaluating the 
+solution of variants of the 
+VRP problem for modern 
+logistics challenges.
+Vidal ( Jiang et al., 
+2014 )
+Hybrid genetic search for the 
+CVRP; Open-solver 
+implementation and SWAP* 
+neighborhood
+Implementation of the HGS- 
+CVRP algorithm and 
+libraries and instances for 
+validation.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+3 
+
+===== PAGE 4 =====
+delicate. Currently, TÜL has operations in three (3) Latin American 
+countries (Colombia, Ecuador, and Mexico) and nine (9) cities. Logistics 
+planning is performed daily, where a set of routes is created to dispatch 
+customer orders for the following day. Given the size of each city and 
+commercial development, some instances range from 50 customers to 
+600 cases, making it necessary for the automatic routing algorithm to 
+work effectively for both small- and large – medium to high-sized 
+problems.
+At TÜL, the added value, among other things, lies in the logistics 
+service. Suppose the same customer can place multiple orders on the 
+same day. Each order has a weight, volume, service time, dimensions, 
+geographic coordinates, and a specific time window. Customers can 
+place their orders until late at night, from one day to the next, and even 
+on the same day, using Express delivery modalities. This situation im -
+plies that logistics planning must be a fast process that allows picking 
+and packing activities to start as soon as possible. TÜL operates from a 
+single depot per city. The company manages a heterogeneous fleet 
+comprising two main categories: an owned fleet ( K
+p
+) for closed-loop 
+routes that must return to the depot, and an outsourced fleet ( K
+t
+) for 
+open-loop routes that end at the final customer ’ s location. Within these 
+categories exist various distinct vehicle types (e.g., Motorcycle, NHR, 
+Truck), each with specific capacity, cost, and operational characteristics, 
+as detailed in Appendix A. Crucially, the number of available vehicles of 
+each specific type is limited and can vary daily. TÜL has a single 
+warehouse per city from which all vehicles start their route (single 
+depot); these vehicles have to return (close routes) to the depot by using 
+their fleet or not (open routes) by using outsourced vehicles. The types of 
+vehicles have different container dimensions, where orders are loaded 
+with fixed hiring costs and variable costs for route time, mileage, and the 
+number of stops. Additionally, the routes can be urban, rural, or mixed, 
+for which different fleet rates apply depending on the area. Finally, there 
+are geographical areas where certain types of vehicles are prohibited 
+from traveling due to government and tourist restrictions, for example, 
+in the historic center of Ecuador.
+Therefore, the problem of TÜL has been considered a rich close-open 
+mixed vehicle routing problem with time windows (RVRPTW). The 
+considered RVRPTW could be formulated by a sparse graph G = ( V , E ) , 
+where V = { 0 } ∪ N is the set of nodes with Vertex 0 represents the depot 
+and N = { 1 , ..., n } correspond to the set of customers. A fleet of vehicles 
+K composed of two types are given: the vehicle of the own fleet ( K
+p
+) and 
+the vehicles from external collaborative carrier ( K
+t
+).
+The following attributes for the TUL problem are the following 
+( Table 2 ).
+3.2. Proposed approach
+The problem described in Section 3.1 corresponds to an open-close 
+vehicle routing problem with a heterogeneous fleet and time windows 
+with some company-specific constraints (real rich routing problem with 
+time windows   RVRPTW). Moreover, the literature review revealed -
+that the correct management of the heterogeneous fleet is a critical 
+factor for the RVRPTW. Consequently, a simplified and adaptive version 
+of the ILS-RVND-SP algorithm proposed by ( Subramanian et al., 2013 ) 
+was presented to solve the RVRPTW based on the excellent results ob -
+tained for versions of the VRP considering heterogeneous fleets. In 
+particular, the iterative local search (ILS) and set-partitioning (SP) 
+procedures have been adapted for the RVRPTW. Unlike in ( Subramanian 
+et al., 2013 ), we consider an extended version of the ILS at three 
+different execution times, as dictated by the problem ’ s constraints. 
+Similarly, the SP is applied only once in the proposed algorithm. Fig. 1
+illustrates the proposed algorithm.
+Three main steps are identified in the proposed algorithm. In the first 
+step, the algorithm decomposes the RVRPTW into N subproblems that 
+are less challenging to solve. The second step seeks to solve each sub -
+problem created in the first step. Finally, the third step collects the 
+routes from each subproblem to present them to the decision maker.
+The first step called the parallel problem generator, divides the initial 
+problem into multiple subproblems using an Iterated Local Search (ILS) 
+metaheuristic. At this stage, the original Rich Vehicle Routing Problem 
+Table 2 
+Core Attributes of the TUL RVRPTW.
+Attribute Description Type
+Route Structure Routes can be either closed (vehicle returns to the 
+depot) or open (vehicle ends at the last customer ’ s 
+location).
+Structural
+Fleet 
+Composition
+A heterogeneous fleet with multiple vehicle types, 
+each with unique capacity, cost, and availability.
+Resource
+Vehicle 
+Availability
+The number of vehicles of each specific type is 
+limited.
+Constraint
+Time Windows Each customer order has a time window for 
+delivery. Arriving before the window opens 
+results in waiting time; arriving after it closes is 
+forbidden.
+Hard
+Capacity 
+Constraints
+Volume is a hard constraint and cannot be 
+exceeded. Weight and Length are soft constraints; 
+they can be exceeded up to a certain percentage, 
+incurring a significant cost penalty.
+Hard/Soft
+Route Duration Route time is a soft constraint. Routes can exceed 
+a standard duration, incurring a penalty cost 
+proportional to the overtime.
+Soft
+Geographical 
+Zoning
+Certain vehicle types are prohibited from entering 
+specific geographical zones due to regulations or 
+physical barriers. This is a hard constraint.
+Hard
+Cost Function A complex, multi-component objective function 
+including fixed vehicle usage costs, variable costs 
+(distance, time, stops), and penalty costs for 
+violating soft constraints.
+Objective
+Fig. 1. Implementation diagram of the algorithm.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+4 
+
+===== PAGE 5 =====
+(RVRP) is simplified into a Capacitated Vehicle Routing Problem 
+(CVRP), temporarily excluding the full complexity of real-world con -
+straints. Specifically, the vehicle capacity refers to the processing ca -
+pacity of the subsequent microservice in terms of the number of distinct 
+requests. Notably, this microservice is created due to technological 
+constraints associated with horizontal scaling. Given the NP-hard nature 
+of vehicle routing problems, solving large-scale instances directly is 
+computationally challenging. Consequently, decomposing the problem 
+into smaller, manageable subproblems — each defined by the routes 
+obtained from the simplified CVRP — allows for parallel processing. 
+These subproblems are iteratively refined by incrementally reintroduc -
+ing the original constraints, thus balancing computational feasibility 
+and solution quality.
+The second step involves solving each generated subproblem indi -
+vidually to apply a two-stage methodology. The first stage, namely the 
+logistic routing planner, comprises two algorithms: the ILS and the SP. 
+The ILS is used to solve a simplified version of each subproblem, which 
+assumes an unlimited availability of vehicles of each type, thereby 
+addressing the fleet size and mixing aspects of the vehicle routing 
+problem with time windows (FSMVRPTW). The SP receives the solutions 
+proposed by the ILS as input. In particular, the ILS result is a superior 
+quality solution that serves as a set of feasible routes (or columns) for the 
+SP. In the SP, the vehicle availability constraint is reestablished, thus 
+allowing the selection of a feasible solution composed of the best routes 
+of the set. In this way, the solved problem takes into account the con -
+straints of the RVRPTW. Finally, the second stage is executed, consisting 
+of a microservice called Route Refiner, which receives each selected 
+route by the SP to apply a final improvement process. For that purpose, 
+the SPTW associated with each route created by the SP is solved through 
+the integer linear programming (ILP) algorithm. The final step involves 
+collecting all the routes generated by the solutions to the different 
+subproblems, consolidating them, and presenting the results in a 
+decision-maker-friendly information system.
+The proposed approach considers operational constraints, which are 
+classified into two (2): hard and soft constraints. The hard constraints 
+cannot be violated under any circumstances, whereas the soft con -
+straints affect the objective function; thus, violating them incurs an 
+additional cost. Since the objective function aims to minimize costs, it 
+attempts to avoid violating soft constraints unless necessary. Whether a 
+constraint is hard or soft is merely an administrative matter, and the 
+implemented algorithm allows for such customization. However, 
+Table 3 shows the configurations they are currently operating.
+3.2.1. Iterative local search (ILS) metaheuristic
+As described above, the ILS algorithm solves either the associated 
+FSMVRPTW or the TSPTW in the route improvement stage of the pro -
+posed algorithm. Hence, the most important details of the algorithm ’ s 
+design are presented below.
+The proposed ILS metaheuristic applies a local search procedure 
+considering the inherent requirements of the problem (e.g., the capac -
+itated vehicle routing problem (CVRP), the fleet size and mixing vehicle 
+routing problem with time windows (FSMVRPTW), or the traveling 
+salesman problem with time windows (TSPTW)) to an initial solution 
+generated via a construction method depending on the problem to be 
+solved. The initial solution is generated via a splitting procedure based 
+on the idea proposed by ( Prins, 2004 ), which typically provides high- 
+quality, feasible solutions within a short computational time. The 
+effectiveness of this initial approach arises from the strategy of grouping 
+customers into feasible routes.
+Initially, all customers are considered collectively, and a giant trav -
+eling salesman problem tour is constructed via the nearest neighborhood 
+heuristic ( Escobar et al., 2013; Escobar et al., 2014; Escobar et al., 
+2014 ). This TSP solution determines the permutation used by the split 
+procedure. An auxiliary multigraph ( Rojas-Saavedra et al., 2023 ) is 
+constructed through this sequence, where each arc represents a feasible 
+route. All problem-specific constraints are validated during the creation 
+of these arcs, ensuring the feasibility of the solution. The resulting 
+structure is a directed acyclic graph (DAG), on which a shortest path 
+problem must be solved to identify the subset of arcs (routes) of mini -
+mum cost, thus yielding a feasible initial solution.
+A critical feature of this stage is the handling of the heterogeneous 
+fleet. The auxiliary graph is constructed as a multigraph. For any po -
+tential route segment (an arc connecting two nodes in the graph), the 
+algorithm evaluates its feasibility and cost for every available vehicle 
+type (it is important to remark that this cost is in a feedback loop from 
+the Set Partitioning phase through the slack variables). This means that 
+if a segment can be feasibly served by, for instance, both a small truck 
+and a large truck, two parallel arcs are created between the nodes, one 
+for each vehicle type, with their respective costs. This multigraph 
+structure is fundamental to generating a diverse set of routing options.
+Encoding the problem as a permutation order leverages the split 
+procedure, delegating constraint validation and cost evaluation to the 
+multigraph construction phase. This strategy allows the optimization 
+search process to focus solely on identifying the optimal permutation. 
+Consequently, it simplifies the definition of general local search opera -
+tors (such as swap, insertion, or 2-opt) without requiring extensive 
+customization specific to the particularities or dimensions of the 
+problem.
+This representation encodes the customers in a permutation, namely, 
+the Big Route , which goes through all the customers. To decode the 
+routes, it is necessary to create an auxiliary graph and solve the Shortest 
+Path Problem (SPP). The SPP solution arcs contain the information 
+related to each feasible route of the problem being solved. In the ILS 
+iterative phase, we use random perturbations that depend on a depth 
+parameter d ; they randomly choose and reorganize d nodes of the 
+complete route ( Big Route ). For other approaches, extensive computa -
+tional tests have been performed to find a suitable parameter value.
+The local search is performed via 2-opt. After several computational 
+experiments considering different local search operators ( Jiang et al., 
+2014; Udin et al., 2017 ) for the considered problem, the best-obtained 
+results are obtained via the 2-opt move. In addition, we note that deep 
+reinforcement learning methods for vehicle routing problems have 
+achieved near-optimum results via node swaps and 2-opt moves ( Wu 
+et al., 2019 ). However, the architecture of the VRP is defined by the 
+number of possible moves, making it less favorable to expand to the 
+general k -opt, leading to lower optimality gaps ( Helsgaun, 2017 ). 
+Therefore, we fix this operator for the local search process. Importantly, 
+the shortest path faster algorithm (SPFA) is applied to the auxiliary 
+graph to obtain the value of the objective function. The SPFA algorithm 
+is an improvement over the Bellman – Ford algorithm, which, in this 
+specific case, has complexity O ( a ) since it is a directed graph, where a is 
+the number of arcs in the graph ( Moore, 1959 ).
+Algorithm 1 shows the proposed ILS procedure. The algorithm ’ s 
+Table 3 
+Implemented Operative Constraints.
+Constraint Type Description
+Maximum 
+weight
+Weak Vehicles can exceed 10 % of their capacity by weight. 
+However, the route ’ s cost increases by 10 % of the 
+average freight.
+Maximum 
+volume
+Strong The maximum volume of a vehicle cannot be exceeded 
+as it would be impossible to pack the products in the 
+container.
+Maximum 
+Length
+Weak Part of a very long product may be left outside the truck. 
+e.g., for a 7 m pipe, a space of 6 m is reserved in the 
+vehicle, but 1 m is outside the container.
+Route time Weak The route time can be exceeded by a maximum of 10 %, 
+and a variable cost is incurred per travel time.
+Slots Strong If a vehicle arrives before the opening strip, it must wait 
+for it to be attended to, but it cannot come after the 
+closing strip.
+Zoning Strong Vehicles must respect the logistics area they can access. 
+Otherwise, the route would be unfeasible.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+5 
+
+===== PAGE 6 =====
+inputs include the depot’s information, the orders, the fleet, the transit 
+time matrix, and the problem’s requirements. As parameters, it is 
+necessary to set the maximum number of iterations of the ILS, the 
+maximum number of iterations of the 2-opt, and the depth of the 
+perturbation. The algorithm outputs are the best sequence of orders 
+found, the value of the objective function, and the pool of feasible routes 
+found by the optimization process. The process begins by computing an 
+initial sequence of orders using a constructive nearest neighbor heuristic 
+(line 1); the initial sequence (large route) is then improved through a 
+local search scheme based on 2-opt movement (line 2). The improved 
+route is stored together with its objective function value and the set of 
+arcs that translate the feasible routes of the problem; these arcs are 
+stored in the pool of arcs (line 3) for the SP algorithm at a later stage. It is 
+crucial to understand the mechanism that populates this pool with a 
+diverse set of routes utilizing different vehicle types. While the shortest 
+path calculation within a single 2optLS call might favor cheaper vehicle 
+types, the power of the ILS lies in its iterative exploration. 
+The randomPerturbation (line 5) continuously alters the customer per -
+mutation, creating new contexts. A route segment that was optimal for a 
+cheap vehicle in one permutation may become infeasible (e.g., due to 
+capacity) in another, forcing the generation of an arc using a more 
+expensive vehicle. The UpdatePoolArcs procedure (line 7) accumu -
+lates all feasible routes generated across all iterations and perturbations, 
+not just those belonging to the incumbent solution. This ensures the -
+PoolArcs becomes a comprehensive ’menu’ of high-quality routes using 
+a wide variety of vehicles, which is essential for the final selection phase.
+Then, an iterative scheme is entered, which consists of perturbing the 
+incumbent and improving it (lines 4–10). The number of iterations is a 
+parameter of the algorithm (line 4). In each iteration, a perturbation is 
+performed on the incumbent solution at a stipulated depth (line 5); this 
+perturbed sequence is improved via the 2-opt local search (line 6). The 
+new arcs generated are added to the arc pool as per the information on 
+the feasible paths of the problem (line 7). If the objective function value 
+of the improved sequence is better than that of the incumbent (line 8), it 
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+6 
+
+===== PAGE 7 =====
+is updated (lines 9 – 10). At the end of the iterative process, the algorithm 
+returns the relevant information of the routes found in the optimization 
+process to the arc pool (line 11).
+To generate feasible solutions, an auxiliary-directed multigraph is 
+constructed based on the sequence of customers. Each arc in this 
+auxiliary graph represents a feasible route segment, ensuring all 
+problem-specific constraints are met. The arc costs incorporate detailed 
+operational considerations, which are discussed extensively in Section 
+3.3.4 (Cost per route), including both fixed and variable components. 
+Notably, adaptations were implemented to reflect real-world con -
+straints. Moreover, this representation accounts for operational com -
+plexities such as excess costs incurred due to overweight shipments and 
+overtime routes, aligning closely with actual logistic operations.
+Given that the same ILS algorithm is employed at different stages 
+within the methodology, the flexible construction of this auxiliary graph 
+proves crucial. The fundamental structure of the graph remains constant 
+throughout, yet the definition and validation of the arcs dynamically 
+incorporate the specific constraints pertinent to each stage. For instance, 
+in scenarios involving open routes, the cost associated with returning to 
+the depot is intentionally omitted, reflecting the operational reality of 
+such cases.
+Algorithm 2 describes the local search performed using 2-opt; it re -
+ceives the sequence of orders and the problem requirements as inputs, 
+and it is necessary to specify a maximum number of iterations as a 
+parameter. This algorithm ’ s outputs are the best sequence of orders 
+found, the value of the objective function, and the set of arcs, including 
+information on the feasible routes. The local search process is configured 
+under the first-improvement philosophy. Accordingly, the first sequence 
+of orders is stored as the incumbent (line 1) and decoded to create the 
+auxiliary graph of possible feasible routes, given the sequence and the 
+problem ’ s requirements (line 2). The resulting graph solves the shortest 
+path problem using the SPFA, yielding a set of arcs with the best routes 
+and the optimal value of the objective function (line 3). In this way, the 
+iterative process begins (lines 4 – 11) by moving to new sequences gen -
+erated by the neighborhood of the 2-opt movement, which are randomly 
+selected in each iteration (line 5). Notably, this movement only requires 
+the requirements when solving the TSPTW. The new sequence is deco -
+ded to assess if it is of better quality (lines 6 – 7); the improved path is 
+stored together with its objective function value and the set of arcs that 
+translate the feasible paths of the problem. If the objective function 
+value of the new sequence is better than the value of the current (line 8), 
+the move is accepted, and the incumbent is updated along with the set of 
+arcs (lines 9 – 11). When the stipulated iterations are exhausted, the al -
+gorithm returns the set of arcs with the relevant information of the 
+routes found in the optimization process (line 12). Restricting both al -
+gorithms to a maximum number of iterations reduces the computation 
+time at the expense of reducing the guarantee that the final solution is a 
+local optimum.
+3.2.2. Set-Partitioning (SP) optimization problem
+The ILS phase acts as a powerful heuristic route generator, operating 
+under an assumption of unlimited vehicle availability to create a rich 
+pool of candidate routes. The Set-Partitioning (SP) procedure ( Baldacci 
+et al., 2008; Fukasawa et al., 2006; Bianco et al., 1994 ) serves as the final 
+and decisive selection mechanism. Its objective is to choose a subset of 
+routes from this pool that minimizes total cost while adhering to the 
+real-world constraint of limited vehicle availability for each type. This 
+stage is solved via linear programming via the primal solver algorithm 
+and the CoinOr-CBC solver ( Forrest, coin-or/Cbc, Zenodo, 05 Mayo, 
+2022 ). The mathematical model consists of a set of feasible routes R , a 
+set of nodes (or orders) to be delivered N , and a set of available vehicle 
+types V . Each route has an associated cost CR
+i
+, and a parameter α
+ij 
+that 
+indicates whether route i ∈ R visits node j ∈ N . Besides, β
+ik 
+indicates 
+whether route i ∈ R is performed by the vehicle type k ( k ∈ V ) . On the 
+other hand, F
+k 
+considers the total of available vehicles of type k ( k ∈ V ) , 
+and since the formulation of this stage can be infeasible, slack variables 
+h
+k 
+(number of required vehicles) are added. Incurring in the slacks 
+mentioned above negatively affects the objective function ( M
+k 
+is a huge 
+number indicating a penalty cost incurred by the slack variable). Simi -
+larly, the primary variable is x
+i
+, which determines whether route i ∈ R is 
+chosen. The mathematical model is described in Eqs. (1) – (5) . 
+min
+∑
+i ∈ R
+CR
+i
+x
+i
++
+∑
+k ∈ V
+M
+k
+h
+k
+(1) 
+s . t .
+∑
+i ∈ R
+x
+i
+α
+ij
+= 1 ∀ j ∈ N (2) 
+(
+∑
+i ∈ R
+x
+i
+β
+ik
+)
+  h
+k
+≤ F
+k
+∀ k ∈ V (3) 
+x
+i
+∈ { 0 , 1 }∀ i ∈ R (4) 
+h
+k
+∈ Z
++
+∀ k ∈ V (5) 
+The objective function (1) minimizes the sum of the costs of the devel -
+oped routes and the sum of the capacity slack variables of each typology. 
+Eq. (2) guarantees that all nodes are visited by precisely one route. Eq. 
+(3) guarantees that the availability of vehicles is met. Eqs. (4) and (5)
+represent the natures of the variables. The feasible routes (columns) that 
+enter this process are those generated by the ILS algorithm in the pre -
+vious stage. The iterative nature of the local search and perturbation 
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+7 
+
+===== PAGE 8 =====
+phases continuously updates the multigraph. Slack variables introduced 
+in this phase serve as feedback mechanisms, penalizing the over- 
+utilization of certain vehicle types. This incentivizes the diversification 
+of routes into the final pool, ensuring representation of all vehicle types 
+required by the limited availability constraint, effectively balancing 
+route cost minimization and fleet heterogeneity management. Since the 
+complete graph from the last iteration is included, it is always possible to 
+visit all the nodes.
+3.2.3. Reduced set of feasible routes
+During the execution of the ILS algorithm in the logistic routing 
+planner microservice, numerous feasible routes are generated due to 
+local searches and disturbances. For instances of 120 orders, approxi -
+mately 140,000 feasible routes are generated. This set then enters the SP 
+process to select those routes (columns) that minimize the total costs. 
+The optimization process for the complete set of routes yields a 
+computational problem, as creating the linear model requires a signifi -
+cant amount of RAM. In addition, the computing time increases because 
+the stop criterion of the primal simplex is optimal, and it is necessary to 
+perform a greater number of iterations.
+The Algorithm 3 procedure was included to reduce the number of 
+routes, eliminate redundant routes, and select the percentile p of the 
+most promising routes based on an evaluation criterion of the cost per 
+transported kilogram. The complete graph of the last iteration of the ILS 
+is maintained to avoid cases of infeasibility, which contains the indi -
+vidual routes for each request. This algorithm is also used to extract the 
+information related to the routes from the pool of arcs. For this reason, 
+the algorithm returns a pool of routes, which will feed the SP algorithm. 
+Starting from the arc pool (line 1), the route information for each arc is 
+extracted (line 2) and added to the routing pool (line 3). Each route into 
+the pool is subsequently assessed (line 4). First, the redundancy of each 
+route is evaluated to determine if other routes in the pool serve the same 
+orders at a lower cost (line 5). Furthermore, it is evaluated if each route 
+does not exceed the cost evaluation criteria (line 6). The first cycle, 
+which creates the pool of routes (lines 1 – 3), is used for this purpose. The 
+cost threshold value a route must exceed to belong to the stipulated p 
+percentile is precalculated. Any route that does not pass the cost filter is 
+eliminated from the routing pool (lines 6 or 8, respectively). The above 
+procedure is used to obtain a reduced pool of routes, thereby alleviating 
+the load on the SP algorithm.
+Fig. 2. Developed architecture for implementation of the algorithm in TUL S.A.S.
+Fig. 3. Graphic representation of the implementation with Uber ® H3 hexagons; (A) grouping of coordinates in cells; (B) calculation of TM based on cells of origin 
+and destination.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+8 
+
+===== PAGE 9 =====
+3.3. Provision data and system architecture
+The obtained data related with the real case and the system archi -
+tecture are described as following.
+3.3.1. Transportation times matrix
+The transit time matrix (TM) is the most critical resource for the 
+vehicle routing algorithm. It is the mathematical representation of the 
+geolocation of delivery points, from which the proximity between 
+points, delivery orders, local searches, disturbances, and the initializa -
+tion of solutions are established. This resource in VRP test instances is 
+usually a parameter and is calculated via 2D Euclidean distances. 
+However, this presents a challenge in the application, as its calculation is 
+part of the algorithm ’ s execution time, and factors such as transport 
+routes, traffic, and altimetry must be considered.
+A third-party service is queried via the API to obtain each value of the 
+transport time matrix. We have used HereMaps ® Matrix Routing API v8 
+( HereMaps, 2022 ), although GoogleMaps ® , OSMR ® , MicrosoftMaps ® , 
+and TimeMatrixAI ® , among others, could be used. Here, Maps ® was 
+used to differentiate truck and car transport times, which is necessary for 
+the developed service. On the other hand, a cost between 0.5 and 5.0 
+USD is usually incurred for every 1,000 transactions to calculate the 
+distance matrix. The size of the distance matrix is n
+2
+, where n is the 
+number of locations. It is very costly to calculate the TM each time since 
+many times the customers are repeated; therefore, the transport values 
+have already been calculated. An exact and complete distance matrix 
+between all the pairs of customers would also be very costly since 
+neighboring customers would yield similar results that could be grouped 
+in single data. Similarly, customers from different cities or countries 
+should never be included on the same route; therefore, calculating the 
+transportation time between them is unnecessary.
+The Uber ® H3 library ( Uber, H3: Uber ’ s Hexagonal Hierarchical 
+Spatial Index, 27 06, 2018 ) has been used, which groups geographical 
+coordinates of latitude and longitude in hexagons of different resolu -
+tions to solve the above problems. This fact allows the TM not to be 
+between customers but between H3 hexagons (H3 cells). This situation 
+reduces the TM size and the associated costs of this resource. Finally, the 
+calculation of transportation time between an origin cell and a desti -
+nation cell is stored in an independent database, organized by country 
+and city, since these times do not vary significantly over time. Fig. 3
+illustrates the implementation using hexagons.
+3.3.2. Geographical zone constraints
+For the considered problem, some geographical areas do not permit 
+the entry and exit of certain types of vehicles, typically due to road 
+resistance, low-height bridges, or even tourist reasons. This constraint 
+has been implemented by creating logistics zones by city, allowing each 
+order to have an associated logistics zone, address, and corresponding 
+H3 cell. Each type of vehicle defines which logistics zones it can enter 
+and which it cannot. Finally, this constraint is strictly validated in the 
+ILS procedure of the logistic routing planning platform.
+3.3.3. Service time
+The service time includes the processes of enlistment, unloading, 
+product delivery, invoice review, and payment. A route audit process is 
+carried out, involving a fixed service time and a variable time that de -
+pends on the total weight of the products to be dispatched to estimate 
+this time. Eqs. (6) and (7) represent the behavior described, and Fig. 4
+shows a graph of the calculated function. 
+x =
+W   3000
+1000
+(6) 
+ST = 15 +
+80
+1 + e
+  1 . 4 ( x + 0 . 25 )
+(7) 
+where W is the weight and where ST is the service time. The same 
+customer can receive several orders on the same day, and the service 
+time for consecutive orders for the same customer should only include 
+the fixed calculation (15 min) once. This time includes the enlistment 
+process, that is, location of the address, accommodation of the vehicle at 
+the place of unloading, and verification of invoices that would be per -
+formed only once.
+3.3.4. Cost per route
+The ILS-SP algorithm minimizes costs. Therefore, it is crucial to 
+calculate the costs of the evaluated routes accurately. In some com -
+panies, freight payments to drivers are standardized. However, in some 
+cases, the payment depends on multiple factors that are not yet stan -
+dardized. Although the cost function directly affects the algorithm ’ s 
+performance, a mathematical equation must be established that repre -
+sents the desired solution. For our case study, the requirements are as 
+follows: 
+• Efficient routes for the total time.
+• Zoning Routes. We prefer to have routes grouped in the same logis -
+tics zone rather than linear routes that pass through several zones.
+• Vehicles with a high occupancy rate.
+• Compliance with time windows.
+In our work, it is preferable and more intuitive to consider costs as a 
+percentage of the average freight paid. For this reason, the following 
+cost function was defined: 
+CR
+i
+= C
+i
+[ 1 + 0 . 1 E
+i
++ 0 . 05 P
+i
++ 0 . 1 ( Z
+i
+  1 ) ] + V
+i
+H
+i
+(8) 
+where CR
+i 
+is the total cost of route i ∈ R , C
+i 
+is the fixed cost for hiring the 
+vehicle associated with route i ∈ R , and E
+i 
+is a binary variable that in -
+dicates whether the weight capacity of route i ∈ R is exceeded. In 
+addition, P
+i 
+is the number of orders not delivered for the route i ∈ R 
+within the established time slot, Z
+i 
+is the number of different logistics 
+zones of route i ∈ R , V
+i 
+is the variable cost per hour of transport of the 
+route i ∈ R , and H
+i 
+is the time of route i ∈ R in hours. Although the above 
+equation is general and would allow violating the zoning and time slot 
+operational constraints, in the case of TUL, it was decided to eliminate 
+those routes with values of P
+i
+> 0 and that had logistics zones not 
+allowed for the associated vehicle with the evaluated route.
+3.3.5. System architecture
+The microservices of the architecture are described in Fig. 2 . 
+Regarding the implementation of technology for the considered 
+RVRPTW, the algorithm must include one or more microservices (MSs) 
+deployed in Docker containers as part of a Kubernetes application hosted 
+on Amazon Web Services (AWS). These microservices must work 
+through requests and responses by messaging via Kafka and be 
+Fig. 4. Service Time (ST) function.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+9 
+
+===== PAGE 10 =====
+independent of the country or city of implementation. Additionally, it 
+must be ensured that a solution to the problem is always found; the 
+formulation cannot give rise to cases of infeasibility. There are compu -
+tational and operational limitations, including a maximum of four (4) 
+instances (PODs) of the MS executing in parallel, each with up to 6 GB of 
+RAM, and access to a single non-relational database in DocumentDB 
+with pre-calculated information. The matrix of transport times and a 
+response time less than or equal to five (5) minutes are precise.
+4. Computational results
+4.1. Implementation of the proposed approach for TUL S.A.S
+The implementation of an algorithm to solve the vehicle routing 
+problem has been a priority since the inception of TUL in 2020. Initially, 
+the solved VRPs were small and could be solved via exact formulations. 
+However, they increased in size, and according to the literature, it is 
+necessary to use heuristics, metaheuristics, and hybrid approaches that 
+could support them ( Bernal et al., 2017; Sepúlveda et al., 2014; Santana 
+Contreras et al., 2025; Escobar-Falc ´on et al., 2016; Bernal et al., 2021; 
+Cacchiani et al., 2018; Velandia et al., 2024 ).
+Similarly, this paper did not always mention the technology used in 
+infrastructure. This infrastructure was evolving as the business needed 
+it. The first infrastructure is a monolith implementation. Then, it was 
+migrated to requests via the API. A single microservice is subsequently 
+hosted on Amazon Web Services (AWS). Finally, a set of 3 independent 
+microservices guarantees horizontal scalability. Fig. 5 illustrates the 
+monthly growth in the number of dispatched packages for TUL. Table 3
+presents the current size of the VRP instances that need to be solved 
+daily for each city, and Table 4 lists the types of vehicles and their 
+Fig. 5. Increase in the number of orders for each city.
+Table 4 
+Sizes of the problems with the RVRPTW for different countries.
+Country/City μ -customers σ -customers μ -orders σ -orders
+Colombia ​ ​ ​ ​
+Barranquilla 98 ± 24 117 ± 29
+Bucaramanga 63 ± 17 79 ± 21
+Cali 100 ± 25 114 ± 26
+Bogot ´a 428 ± 82 504 ± 95
+Medellín 100 ± 13 120 ± 19
+Ecuador ​ ​ ​ ​
+Guayaquil 190 ± 38 251 ± 53
+Quito 241 ± 35 324 ± 54
+Mexico ​ ​ ​ ​
+Guadalajara 101 ± 20 123 ± 27
+Tlalnepantla 344 ± 95 424 ± 124
+Source. Owner.
+Fig. 6. Performance of the proposed approach considering diverse values of depth ( d ).
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+10 
+
+===== PAGE 11 =====
+Table 5 
+Results obtained for the RVRPTW in the TUL SAS.
+Country City Instance Order Lower-Bound Solution Time(s) Gap(%)
+Colombia Barranquilla 1 93 $ 4,101,250 $ 4,565,987 75.43 11.30
+Colombia Barranquilla 2 111 $ 6,303,000 $ 6,915,069 79.74 9.70
+Colombia Barranquilla 3 89 $ 4,992,625 $ 5,327,793 63.56 6.70
+Colombia Barranquilla 4 88 $ 4,328,625 $ 4,811,788 68.88 11.20
+Colombia Barranquilla 5 67 $ 3,274,108 $ 3,536,549 48.05 8.00
+Colombia Barranquilla 6 59 $ 3,947,625 $ 4,214,980 36.05 6.80
+Colombia Barranquilla 7 72 $ 3,986,188 $ 4,289,910 45.90 7.60
+Colombia Barranquilla 8 85 $ 5,948,919 $ 6,491,965 47.75 9.10
+Colombia Cali 1 101 $ 3,955,000 $ 4,073,100 136.03 3.00
+Colombia Cali 2 84 $ 3,587,500 $ 4,062,003 74.55 13.20
+Colombia Cali 3 115 $ 4,400,000 $ 4,840,948 139.30 10.00
+Colombia Cali 4 115 $ 4,288,613 $ 4,442,571 130.40 3.60
+Colombia Bogot ´a D.C. 1 120 $ 3,677,500 $ 4,062,264 273.91 10.50
+Colombia Bogot ´a D.C. 2 117 $ 4,050,000 $ 4,571,616 208.71 12.90
+Colombia Bogot ´a D.C. 3 120 $ 3,150,000 $ 3,417,111 297.98 8.50
+Colombia Bogot ´a D.C. 4 119 $ 3,600,000 $ 4,042,573 257.49 12.30
+Colombia Bogot ´a D.C. 5 116 $ 3,600,000 $ 4,141,266 312.02 15.00
+Colombia Bogot ´a D.C. 6 120 $ 4,446,250 $ 4,965,159 204.62 11.70
+Colombia Bogot ´a D.C. 7 118 $ 3,150,000 $ 3,655,386 234.95 16.00
+Colombia Bogot ´a D.C. 8 120 $ 3,600,000 $ 4,246,283 199.86 18.00
+Colombia Bogot ´a D.C. 9 85 $ 2,250,000 $ 2,511,079 130.02 11.60
+Colombia Bogot ´a D.C. 10 109 $ 4,050,000 $ 4,411,814 143.21 8.90
+Colombia Bogot ´a D.C. 11 45 $ 1,668,750 $ 1,731,950 38.60 3.80
+Colombia Bogot ´a D.C. 12 120 $ 4,653,750 $ 4,911,983 232.32 5.50
+Colombia Bogot ´a D.C. 13 84 $ 2,475,000 $ 2,586,962 124.04 4.50
+Colombia Bogot ´a D.C. 14 93 $ 2,650,000 $ 2,650,000 158.09 0.00
+Colombia Bogot ´a D.C. 15 89 $ 4,455,000 $ 4,691,947 72.74 5.30
+Colombia Bogot ´a D.C. 16 120 $ 5,653,750 $ 5,931,763 132.21 4.90
+Colombia Medellín 1 112 $ 3,901,250 $ 4,434,245 175.58 13.70
+Colombia Medellín 2 111 $ 3,533,750 $ 3,647,020 177.26 3.20
+Colombia Medellín 3 119 $ 3,865,000 $ 4,140,403 250.37 7.10
+Colombia Medellín 4 114 $ 4,950,000 $ 5,398,763 172.11 9.10
+Average 148.18 8.83
+Mexico Guadalajara 1 83 MXN 23,100 MXN 25,726 83.16 11.40
+Mexico Guadalajara 2 91 MXN 24,379 MXN 26,450 130.1 8.50
+Mexico Guadalajara 3 107 MXN 28,160 MXN 31,682 173.08 12.50
+Mexico Guadalajara 4 89 MXN 24,640 MXN 26,887 117.38 9.10
+Mexico Mexico City 1 118 MXN 37,049 MXN 40,508 121.44 9.30
+Mexico Mexico City 2 56 MXN 16,000 MXN 16,925 46.18 5.80
+Mexico Mexico City 3 120 MXN 41,600 MXN 47,381 132.1 13.90
+Mexico Mexico City 4 120 MXN 38,400 MXN 39,219 136.06 2.10
+Mexico Mexico City 5 57 MXN 16,835 MXN 18,169 43.53 7.90
+Mexico Mexico City 6 63 MXN 15,307 MXN 16,939 45.42 10.70
+Mexico Mexico City 7 115 MXN 32,000 MXN 34,306 117.07 7.20
+Mexico Mexico City 8 100 MXN 25,600 MXN 27,059 95.56 5.70
+Mexico Mexico City 9 105 MXN 45,379 MXN 48,954 86.01 7.90
+Mexico Mexico City 10 89 MXN 26,880 MXN 29,753 93.46 10.70
+Mexico Mexico City 11 97 MXN 28,800 MXN 30,691 72.83 6.60
+Mexico Mexico City 12 76 MXN 22,400 MXN 25,102 59.38 12.10
+Mexico Mexico City 13 88 MXN 27,876 MXN 30,733 83.33 10.30
+Mexico Mexico City 14 76 MXN 24,640 MXN 27,685 56.79 12.40
+Mexico Mexico City 15 75 MXN 26,880 MXN 29,080 52.85 8.20
+Average 91.88 9.07
+Ecuador Guayaquil 1 92 USD 720 USD 800 194.28 11.10
+Ecuador Guayaquil 2 72 USD 648 USD 701 75.89 8.20
+Ecuador Guayaquil 3 118 USD 1,260 USD 1,405 322.38 11.50
+Ecuador Guayaquil 4 111 USD 864 USD 892 239.01 3.20
+Ecuador Guayaquil 5 118 USD 2,160 USD 2,349 108.71 8.80
+Ecuador Quito 1 118 USD 1,134 USD 1,175 230.18 3.60
+Ecuador Quito 2 100 USD 2,340 USD 2,494 67.51 6.60
+Ecuador Quito 3 112 USD 1,296 USD 1,400 146.1 8.00
+Ecuador Quito 4 71 USD 720 USD 866 82.85 20.30
+Ecuador Quito 5 80 USD 720 USD 784 75.63 8.90
+Ecuador Quito 6 116 USD 1,260 USD 1,459 261.7 15.80
+Ecuador Quito 7 113 USD 2,520 USD 2,730 95.99 8.30
+Ecuador Quito 8 53 USD 540 USD 579 46.06 7.20
+Ecuador Quito 9 111 USD 3,420 USD 3,668 79.65 7.30
+Ecuador Quito 10 47 USD 432 USD 456 35.09 5.60
+Average 137.40 8.96
+Source. Owner.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+11 
+
+===== PAGE 12 =====
+associated costs for each city. This availability varies depending on the 
+operation day, given the city ’ s negotiations.
+It is worth mentioning that on a typical instance (~120 orders and ~ 
+140,000 feasible routes), the complete set-partitioning (SP) problem 
+occupies ~ 1.2 GB of RAM when first loaded into CBC. After Algorithm 3 
+applies its percentile-based reduction and redundancy elimination, the 
+problem size is reduced to ~ 0.3 GB, representing a decrease of roughly 
+75 %. This fact provides sufficient room under the 6 GB per-pod limit in 
+our Kubernetes deployment, allowing us to run multiple instances in 
+parallel while still reserving memory for future growth.
+A total of 66 real instances of the RVRPTW were evaluated to 
+determine the algorithm ’ s performance, specifically selected to avoid 
+operational zoning constraints or the need to use additional vehicles 
+(slack). The complete set of instances can be downloaded from https 
+://github.com/AndresFRomero/RealRichVRP . On the other hand (and 
+only for evaluation purposes), the maximum route time constraints, the 
+possibility of exceeding the weight, and the maximum length and vol -
+ume constraints were eliminated so that the only capacity constraint was 
+weight. The cost of the routes was reduced to the following equation (9) : 
+CR
+i
+= C
+i
++ V
+i
+H
+i
+(9) 
+where CR
+i 
+is the total cost of route i ∈ R , C
+i 
+is the fixed hiring cost for the 
+associated vehicle of route i ∈ R , V
+i 
+is the variable cost for the routing 
+time i ∈ R , and H
+i 
+is the total time of the route i ∈ R . Table 4 lists the 
+sizes of the problems, and Table A1 lists the vehicle characteristics (see 
+Appendix Section).
+A lower bound (LB) was calculated via (10) to evaluate the quality of 
+the implemented algorithm. The LB corresponds to the sum of the cost of 
+the minimum number of vehicles necessary to comply with the weight 
+capacity constraint and the variable cost per time incurred if the prob -
+lem is reduced to a TSP. 
+LowerBound
+k
+= Knapsac k
+k
++ TSP
+k
+(10) 
+The formulation of Eqs. (10) – (13) was used to calculate the number of 
+minimum necessary vehicles, which corresponds to a classic knapsack 
+problem. where WT is the total weight of orders, C
+k 
+is the fixed cost for 
+hiring vehicle k ∈ V , and W
+k 
+is the weight capacity that vehicle k ∈ V 
+supports. In addition, F
+k 
+is the availability of vehicles of type k , and y
+k 
+is 
+an integer decision variable that indicates the number of selected 
+vehicles of type k ∈ V . Table A1 (Appendix Section) describes the 
+characteristics of the vehicles used for Eqs. (11) – (14) .
+For each instance, the maximum number of iterations of the main 
+loop in the proposed approach is set to 50 xn after extensive computa -
+tional tests, ranging from 5, 10, 15, 25, 50, and 100 times the number of 
+customers. In addition, on average, the best performance of the pro -
+posed approach is achieved with a value of parameter d of 0 . 15 xn . For 
+this case, we perform several computational tests ranging in parameter d 
+values between 0.05 and 0.40 times the number of customers (please see 
+Fig. 6 ). We calibrated each one ’ s parameters over time. These values are 
+also extended for the CVRP and VRPTW instances. 
+min
+∑
+k ∈ V
+C
+k
+y
+k
+(11) 
+s . t .
+∑
+k ∈ V
+W
+k
+y
+k
+≥ WT (12) 
+y
+k
+≤ F
+k
+∀ k ∈ V (13) 
+y
+k
+∈ Z
++
+(14) 
+For the 66 instances, the Gap (last column) was calculated concerning 
+the calculated lower bound, and the results are summarized in Table 5 . 
+In these instances, we have calculated an average gap for each country. 
+We obtained a minor average gap of 8.83 % for Colombia, whereas 
+Mexico had an average gap of 9.07 %. However, the average gap is al -
+ways smaller than 10 %. The average execution times for Colombia, 
+Mexico, and Ecuador are 148.18, 91.88, and 137.40, respectively. These 
+values are considered good-quality results, considering the computa -
+tional limitations that exist, and the lower bound could be even less than 
+optimal on many occasions. Additionally, it is essential to note that the 
+instances have characteristics that favor the algorithm; specifically, they 
+have broad and standardized time slots, such as AM, PM, and all day. 
+Additionally, the nature of these instances is that the orders (nodes) are 
+distributed throughout the city rather than in clusters. This situation 
+favors the proposed approach since it is based on routing first and 
+grouping later.
+Fig. 7. Optimality gaps for the CVRP instances ( Golden et al., 1984 ).
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+12 
+
+===== PAGE 13 =====
+4.2. CVRP instances
+The performance of the proposed algorithm has been analyzed in the 
+well-known instances of the literature for the CVRP. Although the al -
+gorithm does not focus on achieving results close to the optimum, as the 
+computational limitations it must support for implementation would not 
+allow reaching these values, it still obtains good results and sometimes 
+finds the optimal result. There is an average GAP of 6.1 % and an 
+average execution time of 90.4 s for the complete set. However, Fig. 7
+displays the sorted optimality gaps, which are color-coded and grouped. 
+Note that the green horizontal line highlights the average optimality gap 
+for the complete set, illustrating the results obtained for the CVRP in -
+stances (6.1 %). Table 6 shows a statistical summary of the character -
+istics of each group. The column “ Total ” corresponds to the number of 
+instances for each group, “ n ” corresponds to the average number of 
+customers, “ k ” represents the average number of available vehicles, 
+“ Avg Time (s) ” represents the computational average time for the 
+number of instances of each group, “ Avg Gap (%) ” corresponds to the 
+average optimality gaps for the instances belonging to each group, and 
+“ Conf. interval ” corresponds to the confidence interval of the average 
+optimality gaps. As expected, a larger number of customers generates 
+more significant optimality gaps.
+4.3. VRPTW instances
+The algorithm ’ s performance is evaluated in the well-known set of 
+instances of Solomon (1987) (Cited in ( Dantzig et al., 1954 ) for the 
+VRPTW. These instances were chosen because they represent the 
+extreme case in which the proposed algorithm could have the worst 
+performance, as they involve a cluster-based routing problem with hard 
+time windows. This situation hinders the performance of algorithms that 
+prioritize routing first and grouping later. The described instances have 
+exactly 100 nodes, an average gap of 21.7 %, and an average execution 
+time of 57.28 s for the complete set. Despite the algorithm ’ s limitations, 
+competitive results were achieved in terms of execution time.
+Fig. 8 shows the sorted optimality gaps, which are colored and 
+divided. Note that the green horizontal line highlights the average 
+optimality gap for the complete set, illustrating the results obtained for 
+the VRPTW instances. Table 7 shows a statistical summary of the char -
+acteristics of each group. The columns are the same as those in Table 6 , 
+except that the number of vehicles is not considered.
+Additionally, the instances that relaxed the time band constraints 
+increased the range in which orders could be delivered, and the Gap 
+decreased significantly, which again confirms the performance of the 
+proposed algorithm in real cases. It would also have good performance 
+because, in those cases, the slots are usually standardized and allow for 
+much maneuvering, as the time between the start and end of the slot is 
+long, enabling the meeting of demand from several customers.
+Table 8 presents the results of the Wilcoxon signed-rank test, 
+comparing the outcomes obtained by the proposed ILS against the best- 
+known solutions (BKS) reported in the literature for both CVRP and 
+VRPTW (BKS_CVRP and BKS_VRPTW, respectively). The choice of this 
+non-parametric test was justified by the Shapiro-Wilk normality test 
+results, which indicated a non-normal distribution (p-value < 0.05). All 
+significance values (Sig. = 0.001) indicate statistically significant 
+Table 6 
+Results of the set of instances for the CVRP ( Golden et al., 1984 ).
+Group Total n k Avg Time (s) Avg Gap (%) Conf. interval
+1st 12 40.58 6.08 26.58 1.04 [0.79 – 1.29]
+2nd 12 59.25 6.92 40.08 3.45 [3.25 – 3.65]
+3rd 21 58.48 7.52 47.71 6.04 [5.84 – 6.24]
+4th 20 92.20 9.40 203.70 10.71 [9.92 – 11.5]
+Source. Owner.
+Fig. 8. Optimality gaps for the VRPTW of Solomon ’ s (1987) set of instances ( Golden et al., 1984 ).
+Table 7 
+Results of Solomon ’ s (1987) set of instances ( Golden et al., 1984 ).
+Group Total n Avg Time (s) Avg Gap (%) Conf. interval
+1st 26 100 74.51 11.54 [9.52 – 13.56]
+2nd 20 100 41.36 24.67 [23.6 – 25.74]
+3rd 5 100 40.63 31.97 [31.42 – 32.52]
+4th 4 100 45.65 60.16 [55.07 – 65.25]
+Source. Owner.
+Table 8 
+Results of Inferential Statistical Tests.
+ILS vs BKS_CVRP ILS vs BKS_VRPTW
+Z   3.415   3.298
+Sig. 0.001 0.001
+Source. Owner.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+13 
+
+===== PAGE 14 =====
+differences between the ILS outcomes and the corresponding BKSs.
+5. Concluding remarks and future work
+This paper proposes a hybrid algorithm to solve an RVRP, consid -
+ering an asymmetric close-open vehicle routing problem that accounts 
+for capacity constraints, heterogeneous fleets, time windows, and 
+computational and operational implementation constraints. A combined 
+iterative local search and set-partitioning problem strategy is proposed, 
+along with a computing architecture that meets all the constraints. The 
+problem is considered an RVRPTW and has been generated from the 
+reality of a Colombian technology company. Technological and opera -
+tional limitations have been taken into account, resulting in high-quality 
+solutions. Just as an algorithmic strategy is essential, third-party archi -
+tecture and tools are also essential. The obtained results suggest that the 
+academic solutions for the last-mile distribution problems yield excel -
+lent results and work very well for test instances. However, it is chal -
+lenging to implement more robust versions in this context, given the 
+computational limitations and the cognitive gap that still exists.
+The proposed approach yields good solutions within a short 
+computing time. The results for benchmarking instances for VRP vari -
+ants are competitive. The evaluated instances are the most challenging 
+for the algorithm, as the time windows are tight and do not allow for 
+significant improvement in the local search processes. In addition, the 
+proposed ILS-SP has a contrary philosophy: it routes first and then is 
+grouped. The strategy used to solve the problem involves breaking it 
+down into more manageable sub-problems and employing various 
+methodologies that enable efficient problem-solving. Although this 
+strategy may affect the quality of the obtained solution, it is intuitive and 
+computationally compatible with the current requirements of the 
+Colombian company.
+For future work, three-dimensional packing constraints ( Rojas-Saa -
+vedra et al., 2023; Rodríguez et al., 2022 ) should be considered, as the 
+company often reprocesses due to routes that cannot be reached 
+correctly during vehicle loading and must be redesigned. Additionally, 
+the company already has information on the items ’ dimensions, orien -
+tations, and load supports for transportation.
+CRediT authorship contribution statement
+Andr ´es Felipe Romero Silva: Visualization, Validation, Software, 
+Methodology, Formal analysis, Data curation. Alejandra Tabares 
+Pozos: Methodology, Investigation, Formal analysis, Conceptualization. 
+David Alvarez Martinez: Writing – review & editing, Supervision, 
+Resources, Project administration, Methodology, Investigation, 
+Conceptualization. John Willmer Escobar: Writing – review & editing, 
+Writing – original draft, Visualization, Validation, Supervision, 
+Investigation.
+Appendix 1 
+Table A1 .
+Data availability
+The data is available at: https://github.com/AndresFRomero/ 
+RealRichVRP
+References
+Bernal, J., Escobar, J. W., Paz, J. C., Linfati, R., & Gatica, G. (2018). A probabilistic 
+granular tabu search for the distance constrained capacitated vehicle routing 
+problem. International Journal of Industrial and Systems Engineering, 29 (4), 453 – 477 .
+Dan G. (2021) Supply Chain Digest - Logistics Cost as Percent of GDP fall to 7.4%, 
+Available: https://www.scdigest.com/firstthoughts/21-06-25_State_of_Logistics_ 
+Report_Review_Comment.php.
+Departamento Nacional de Planeaci ´on (2021). A 12.6% cayeron los costos logísticos de 
+las empresas frente a sus ventas. Available: https://www.dnp.gov.co/.
+Linfati, R., & Escobar, J. W. (2018). Reoptimization heuristic for the capacitated vehicle 
+routing problem. Journal of Advanced Transportation, 2018 .
+Pecin, D., Contardo, C., Desaulniers, G., & Uchoa, E. (2017). New enhancements for the 
+exact solution of the vehicle routing problem with time windows. INFORMS Journal 
+on Computing, 29 (3), 489 – 502 .
+Escobar, J. W., Adarme-Jaimes, W., & Clavijo-Buritic ´a, N. (2017). Comparative analysis 
+of granular neighborhoods in a Tabu Search for the vehicle routing problem with 
+heterogeneous fleet and variable costs (HFVRP). Revista Facultad de Ingeniería, 26 
+(46), 93 – 104 .
+Puenay ´an, D. E., Londo ˜no, J. C., Escobar, J. W., & Linfati, R. (2014). Un algoritmo basado 
+en búsqueda tabú granular para la soluci ´on de un problema de ruteo de vehículos 
+considerando flota heterog ´enea. Revista Ingenierías Universidad de Medellín, 13 (25), 
+81 – 98 .
+Caceres-Cruz, J., Arias, P., Guimarans, D., Riera, D., & Juan, A. A. (2014). Rich vehicle 
+routing problem: Survey. ACM Computing Surveys (CSUR), 47 (2), 1 – 28 .
+Schmid, V., Doerner, K. F., & Laporte, G. (2013). Rich routing problems arising in supply 
+chain management. European Journal of Operational Research, 224 (3), 435 – 448 .
+Lahyani, R., Khemakhem, M., & Semet, F. (2015). Rich vehicle routing problems: From a 
+taxonomy to a definition. European Journal of Operational Research, 241 (1), 1 – 14 .
+Ai, T. J., & Kachitvichyanukul, V. (2009). A particle swarm optimization for the vehicle 
+routing problem with simultaneous pickup and delivery. Computers & Operations 
+Research, 36 (5), 1693 – 1702 .
+Subramanian, A., Drummond, L. M., Bentes, C., Ochi, L. S., & Farias, R. (2010). A parallel 
+heuristic for the vehicle routing problem with simultaneous pickup and delivery. 
+Computers & Operations Research, 37 (11), 1899 – 1911 .
+Braekers, K., Ramaekers, K., & Van Nieuwenhuyse, I. (2016). The vehicle routing 
+problem: State of the art classification and review. Computers & Industrial Engineering, 
+99 , 300 – 313 .
+Konstantakopoulos, G. D., Gayialis, S. P., & Kechagias, E. P. (2022). Vehicle routing 
+problem and related algorithms for logistics distribution: A literature review and 
+classification. Operational Research, 22 (3), 2033 – 2062 .
+Elshaer, R., & Awad, H. (2020). A taxonomic review of metaheuristic algorithms for 
+solving the vehicle routing problem and its variants. Computers & Industrial 
+Engineering, 140 , Article 106242 .
+Subramanian, A., Uchoa, E., & Ochi, L. S. (2013). A hybrid algorithm for a class of vehicle 
+routing problems. Computers & Operations Research, 40 (10), 2519 – 2531 .
+Penna, P. H. V., Subramanian, A., Ochi, L. S., Vidal, T., & Prins, C. (2019). A hybrid 
+heuristic for a broad class of vehicle routing problems with heterogeneous fleet. 
+Annals of Operations Research, 273 , 5 – 74 .
+Pecin, D., Pessoa, A., Poggi, M., & Uchoa, E. (2017). Improved branch-cut-and-price for 
+capacitated vehicle routing. Mathematical Programming Computation, 9 , 61 – 100 .
+Costa, L., Contardo, C., & Desaulniers, G. (2019). Exact branch-price-and-cut algorithms 
+for vehicle routing. Transportation Science, 53 (4), 946 – 985 .
+Table A1 
+Types of vehicles and their characteristics.
+Fleet Cost (Average)
+Vehicle Capacity(kg) Length(cm) Height(cm) Width(cm) Time 
+(min)
+Colombia (COP) Mexico 
+(MXN)
+Ecuador (USD)
+Motorcycle 35 75 50 50 480 60.000 650 30
+Big Motorcycle 200 200 150 100 480 120.000 1.200 70
+Vehicle 800 200 200 150 420 150.000 2.000 80
+NHR 2,000 450 200 200 420 280.000 2.500 100
+Truck 3,500 600 240 240 360 300.000 4.500 130
+Small Truck 5,000 600 240 240 360 350.000 5.500 140
+Medium Truck 8,000 600 240 240 360 450.000 6.000 150
+Large Truck 14,000 600 240 240 360 650.000 6.750 165
+Flatbed Truck 20,000 700 240 240 360 850.000 7.500 180
+Source. Owner.
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+14 
+
+===== PAGE 15 =====
+Rojas-Saavedra, J. E., 
+´
+Alvarez-Martínez, D., & Escobar, J. W. (2023). Boosting 
+sustainable development goals: A hybrid metaheuristic approach for the 
+heterogeneous vehicle routing problem with three-dimensional packing constraints 
+and fuel consumption. Annals of Operations Research , 1 – 46 .
+Osorio-Mora, A., Escobar, J. W., & Toth, P. (2023). An iterated local search algorithm for 
+latency vehicle routing problems with multiple depots. Computers & Operations 
+Research, 158 , Article 106293 .
+Subramanian, A., Ochi, L. S., & Uchoa, E. (2013). Heuristic, exact and hybrid approaches 
+for vehicle routing problems. In Concurso de Teses e Dissertaç ˜oes (CTD) (pp. 83 – 88). 
+Accesed 01/06/2025 .
+CVRPLIB, “ Capacitated Vehicle Routing Problem Library. ” Accessed: Mar. 24, 2025. 
+[Online]. Available: http://vrp.atd-lab.inf.puc-rio.br/index.php/en/.
+Rieck, J., & Zimmermann, J. (2010). A new mixed integer linear model for a rich vehicle 
+routing problem with docking constraints. Annals of Operations Research, 181 (1), 
+337 – 358 .
+Masmoudi, M., Benaissa, M., & Chabchoub, H. (2013). Mathematical modeling for a rich 
+vehicle routing problem in E-commerce logistics distribution. In 2013 International 
+Conference on Advanced Logistics and Transport (pp. 290-295). IEEE.
+Souza Neto, J. F. D., & Pureza, V. (2016). Modeling and solving a rich vehicle routing 
+problem for the delivery of goods in urban areas. Pesquisa Operacional, 36 , 421 – 446 .
+Ambrosino, D., & Cerrone, C. (2022). A Rich Vehicle Routing Problem for a City Logistics 
+Problem. Mathematics, 10 (2), 191 .
+Ceselli, A., Righini, G., & Salani, M. (2009). A column generation algorithm for a rich 
+vehicle-routing problem. Transportation Science, 43 (1), 56 – 69 .
+Oppen, J., L ø kketangen, A., & Desrosiers, J. (2010). Solving a rich vehicle routing and 
+inventory problem using column generation. Computers & Operations Research, 37 (7), 
+1308 – 1317 .
+Yang, F., Dai, Y., & Ma, Z. J. (2020). A cooperative rich vehicle routing problem in the 
+last-mile logistics industry in rural areas. Transportation Research Part E: Logistics and 
+Transportation Review, 141 , Article 102024 .
+Amorim, P., Parragh, S. N., Sperandio, F., & Almada-Lobo, B. (2014). A rich vehicle 
+routing problem dealing with perishable food: A case study. TOP, 22 (2), 489 – 508 .
+Alcaraz, J. J., Caballero-Arnaldos, L., & Vales-Alonso, J. (2019). Rich vehicle routing 
+problem with last-mile outsourcing decisions. Transportation Research Part E: Logistics 
+and Transportation Review, 129 , 263 – 286 .
+De Armas, J., Melian-Batista, B., Moreno-Perez, J. A., & Brito, J. (2015). GVNS for a real- 
+world rich vehicle routing problem with time windows. Engineering Applications of 
+Artificial Intelligence, 42 , 45 – 56 .
+De Armas, J., & Meli ´an-Batista, B. (2015). Variable neighborhood search for a dynamic 
+rich vehicle routing problem with time windows. Computers & Industrial Engineering, 
+85 , 120 – 131 .
+Sicilia, J. A., Quemada, C., Royo, B., & Escuín, D. (2016). An optimization algorithm for 
+solving the rich vehicle routing problem based on Variable Neighborhood Search 
+and Tabu Search metaheuristics. Journal of Computational and Applied Mathematics, 
+291 , 468 – 477 .
+Osaba, E., Yang, X. S., Diaz, F., Onieva, E., Masegosa, A. D., & Perallos, A. (2017). 
+A discrete firefly algorithm to solve a rich vehicle routing problem modelling a 
+newspaper distribution system with recycling policy. Soft Computing, 21 (18), 
+5295 – 5308 .
+Rabbouch, B., Sa ˆadaoui, F., & Mraihi, R. (2021). Efficient implementation of the genetic 
+algorithm to solve rich vehicle routing problems. Operational Research, 21 (3), 
+1763 – 1791 .
+Lesch, V., K ¨onig, M., Kounev, S., Stein, A., & Krupitzer, C. (2022). Tackling the rich 
+vehicle routing problem with nature-inspired algorithms. Applied Intelligence , 1 – 25 .
+Marques, A., Soares, R., Santos, M. J., & Amorim, P. (2020). Integrated planning of 
+inbound and outbound logistics with a Rich Vehicle Routing Problem with 
+backhauls. Omega, 92 , Article 102172 .
+Tordecilla, R. D., Copado-M ´endez, P. J., Panadero, J., Martins, L. D. C., & Juan, A. A. 
+(2021). An agile and Reactive Biased-Randomized Heuristic for an Agri-Food Rich 
+Vehicle Routing Problem. Transportation Research Procedia, 58 , 385 – 392 .
+Prins, C. (2004). A simple and effective evolutionary algorithm for the vehicle routing 
+problem. Computers & Operations Research, 31 (12), 195 – 2002 .
+Beasley, J. E. (1983). Route first — cluster second methods for vehicle routing. Omega, 11 
+(4), 403 – 408 .
+Escobar, J. W., Linfati, R., & Toth, P. (2013). A two-phase hybrid heuristic algorithm for 
+the capacitated location-routing problem. Computers & Operations Research, 40 (1), 
+70 – 79 .
+Escobar, J. W., Linfati, R., Toth, P., & Baldoquin, M. G. (2014). A hybrid granular tabu 
+search algorithm for the multi-depot vehicle routing problem. Journal of Heuristics, 
+20 , 483 – 509 .
+Escobar, J. W., Linfati, R., Baldoquin, M. G., & Toth, P. (2014). A granular variable tabu 
+neighborhood search for the capacitated location-routing problem. Transportation 
+Research Part B: Methodological, 67 , 344 – 356 .
+Prins, C., Lacomme, P., & Prodhon, C. (2014). Order-first split-second methods for 
+vehicle routing problems: A review. Transportation Research Part C: Emerging 
+Technologies, 40 , 179 – 200 .
+Baldacci, R., Christofides, N., & Mingozzi, A. (2008). An exact algorithm for the vehicle 
+routing problem based on the set partitioning formulation with additional cuts. 
+Mathematical Programming, 115 , 351 – 385 .
+Fukasawa, R., Longo, H., Lysgaard, J., Arag ˜ao, M. P. D., Reis, M., Uchoa, E., & 
+Werneck, R. F. (2006). Robust branch-and-cut-and-price for the capacitated vehicle 
+routing problem. Mathematical Programming, 106 , 491 – 511 .
+Bianco, L., Mingozzi, A., & Ricciardelli, S. (1994). A set partitioning approach to the 
+multiple depot vehicle scheduling problem. Optimization Methods and Software, 3 
+(1 – 3), 163 – 194 .
+Dantzig, G., Fulkerson, R., & Johnson, S. (1954). Solution of a large-scale traveling- 
+salesman problem. Journal of the Operations Research Society of America, 2 (4), 
+393 – 410 .
+Golden, B., Assad, A., Levy, L., & Gheysens, F. (1984). The fleet size and mix vehicle 
+routing problem. Computers & Operations Research, 11 (1), 49 – 66 .
+Christofides, N., Mingozzi, A., & Toth, P. (1981). Exact algorithms for the vehicle routing 
+problem, based on spanning tree and shortest path relaxations. Mathematical 
+Programming, 20 (1), 255 – 282 .
+Golden, B. L., Magnanti, T. L., & Nguyen, H. Q. (1977). Implementing vehicle routing 
+algorithms. Networks, 7 (2), 113 – 148 .
+Laporte, G., Mercure, H., & Nobert, Y. (1986). An exact algorithm for the asymmetrical 
+capacitated vehicle routing problem. Networks, 16 (1), 33 – 46 .
+Taillard, 
+´
+E. (1993). Parallel iterative search methods for vehicle routing problems. 
+Networks, 23 (8), 661 – 673 .
+Baldacci, R., Christofides, N., & Mingozzi, A. (2008). An exact algorithm for the vehicle 
+routing problem based on the set partitioning formulation with additional cuts. 
+Mathematical Programming, 115 (2), 351 – 385 .
+Subramanian, A. (2008). Metaheurística Iterated Local Search aplicada ao Problema de 
+Rotetamento de Veículos com Coleta e Entrega Simult ȃ nea. — Master ’ s thesis, 
+Programa de P ´os-graduaç ˜ao em Engenharia de Produç ˜ao, Universidade Federal da 
+Paraíba, Jo ˜ao Pessoa, PB, Brazil.
+Vidal, T., Crainic, T. G., Gendreau, M., & Prins, C. (2013). Heuristics for multii-attribute 
+vehicle routing problems: A survey and synthesis. European Journal of Operational 
+Research, 231 (1), 1 – 21 .
+Vidal, T., Crainic, T. G., Gendreau, M., & Prins, C. (2014). A unified solution framework 
+for multii-attribute vehicle routing problems. European Journal of Operational 
+Research, 234 (3), 658 – 673 .
+Uchoa, E., Pecin, D., Pessoa, A., Poggi, M., Vidal, T., & Subramanian, A. (2017). New 
+benchmark instances for the capacitated vehicle routing problem. European Journal 
+of Operational Research, 257 (3), 845 – 858 .
+Vidal, T., Laporte, G., & Matl, P. (2020). A concise guide to existing and emerging vehicle 
+routing problem variants. European Journal of Operational Research, 286 (2), 401 – 416 .
+Vidal, T. (2022). Hybrid genetic search for the CVRP: Open-source implementation and 
+sWAP* neighborhood. Computers & Operations Research, 140 , Article 105643 .
+Jiang, J., Ng, K. M., Poh, K. L., & Teo, K. M. (2014). Vehicle routing problem with a 
+heterogeneous fleet and time windows. Expert Systems with Applications, 41 (8), 
+3748 – 3760 .
+Udin, K., Gui, R., & Rahmawan, A. (2017). Green vehicle routing problem with 
+heterogeneous fleet and time windows. In Proceedings of the 6th International 
+Conference on Software and Computer Applications (pp. 223 – 227) .
+Wu Y, Song W, Cao Z, Zhang J, Lim A. (2019). Learning improvement heuristics for 
+solving the travelling salesman problem. Available from: arXiv:1912.05784.
+Helsgaun, K. (2017). An extension of the Lin-Kernighan-Helsgaun TSP solver for 
+constrained traveling salesman and vehicle routing problems. Roskilde: Roskilde 
+University, 12, 966-980.
+Moore, E. F. (1959). The shortest path through a maze. In Proc. Int. Symp. Switching 
+Theory, 1959 (pp. 285-292).
+Forrest, coin-or/Cbc, Zenodo, 05 Mayo 2022. [On-line]. Available: doi: 10.5281/ 
+zenodo.6522795.
+HereMaps, Here Developer, 2022. [On-line]. Available: https://developer.here.com/ 
+documentation/matrix-routing-api/dev_guide/index.html.
+Uber, H3: Uber ’ s Hexagonal Hierarchical Spatial Index, 27 06 2018. [On-line]. Available: 
+https://eng.uber.com/h3/.
+Bernal, J., Escobar, J. W., & Linfati, R. (2017). A granular tabu search algorithm for a real 
+case study of a vehicle routing problem with a heterogeneous fleet and time 
+windows. Journal of Industrial Engineering and Management, 10 (4), 646 – 662 .
+Sepúlveda, J., Escobar, J. W., & Adarme-Jaimes, W. (2014). An algorithm for the routing 
+problem with split deliveries and time windows (SDVRPTW) applied on retail SME 
+distribution activities. Dyna, 81 (187), 223 – 231 .
+Santana Contreras, E., Escobar, J. W., & Linfati, R. (2025). A heuristic approach for last- 
+mile delivery with consistent considerations and minimum service for a supply 
+chain. Mathematics, 13 (10), 1553 .
+Escobar-Falc ´on, L. M., 
+´
+Alvarez-Martínez, D., Granada-Echeverri, M., Escobar, J. W., & 
+Romero-L ´azaro, R. A. (2016). A matheuristic algorithm for the three-dimensional 
+loading capacitated vehicle routing problem (3 L3L-CVRP). Revista Facultad de 
+Ingeniería Universidad de Antioquia, 78 , 09 – 20 .
+Bernal, J., Escobar, J. W., & Linfati, R. (2021). A simulated annealing-based approach for 
+a real case study of vehicle routing problem with a heterogeneous fleet and time 
+windows. International Journal of Shipping and Transport Logistics, 13 (1 – 2), 185 – 204 .
+Cacchiani, V., Contreras-Bolton, C., Escobar, J. W., Escobar-Falcon, L. M., Linfati, R., & 
+Toth, P. (2018). An iterated local search algorithm for the pollution traveling 
+salesman problem. New Trends in Emerging Complex Rea67l Life Problems: ODS, 
+Taormina, Italy, September 10 – 13, 2018, 83-91.
+Velandia, R. C., Martinez, D. A., & Escobar, J. W. (2024). A metaheuristic algorithm 
+based on Ant Colony based approach for the assigning tasks problem to a workforce 
+with different skills. Decision Science Letters, 13 (3), 729 – 740 .
+Rodríguez, D. A. A., Martínez, D.
+´
+A., & Escobar, J. W. (2022). A hybrid matheuristic 
+approach for the vehicle routing problem with three-dimensional loading 
+constraints. International Journal of Industrial Engineering Computations, 13 , 421 – 434 .
+Desrochers, M., Desrosiers, J., & Solomon, M. (1992). A new optimization algorithm for 
+the vehicle routing problem with time windows. Operations Research, 40 (2), 
+342 – 354 .
+A.F. Romero Silva et al.                                                                                                                                                                                                                       Computers & Industrial Engineering 208 (2025) 111422 
+15 

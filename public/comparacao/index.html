@@ -16,7 +16,13 @@
         <a href="/" class="back-link">← Roteamento</a>
         <h1>Comparação de configurações</h1>
       </div>
-      <span id="city-name">Carregando…</span>
+      <div class="topbar-map-selector">
+        <label for="road-network">Malha viária</label>
+        <select id="road-network" disabled>
+          <option>Carregando malhas…</option>
+        </select>
+        <span id="city-name">Carregando…</span>
+      </div>
     </header>
 
     <main>
@@ -39,6 +45,9 @@
           <div class="scenario-options">
             <label>Velocidade para vias sem dados <strong><span id="speed-value">40</span> km/h</strong></label>
             <input id="average-speed" type="range" min="20" max="80" step="5" value="40" />
+            <div class="scenario-planning-options">
+              <label class="return-option"><input id="return-to-start" type="checkbox" /> Retornar ao primeiro ponto</label>
+            </div>
           </div>
           <ol id="stop-list" class="stop-list"><li class="empty">Nenhum ponto adicionado.</li></ol>
         </article>
@@ -97,7 +106,7 @@
                     </div>
                     <label class="group-checkbox-label group-highlight-toggle">
                       <input type="checkbox" id="group-all-variations" checked />
-                      <span>Todas variações possíveis (10 por algoritmo)</span>
+                      <span>Todos os tipos e corredores H3 (10 combinações)</span>
                     </label>
 
                     <div id="group-custom-variations" class="group-custom-variations" style="display: none;">
@@ -139,6 +148,17 @@
                     </div>
                   </div>
 
+                  <div class="group-section">
+                    <div class="group-section-title"><span>Ordenação das paradas</span></div>
+                    <div class="group-checkbox-grid order-grid">
+                      <label class="group-checkbox-label"><input type="checkbox" class="group-order" value="priority:500" checked /><span>Prioridade por prazo</span></label>
+                      <label class="group-checkbox-label"><input type="checkbox" class="group-order" value="ils:250" /><span>ILS 250 ms</span></label>
+                      <label class="group-checkbox-label"><input type="checkbox" class="group-order" value="ils:500" /><span>ILS 500 ms</span></label>
+                      <label class="group-checkbox-label"><input type="checkbox" class="group-order" value="ils:1000" /><span>ILS 1 s</span></label>
+                      <label class="group-checkbox-label"><input type="checkbox" class="group-order" value="ils:3000" /><span>ILS 3 s</span></label>
+                    </div>
+                  </div>
+
                   <div class="group-footer">
                     <label class="group-replace-label">
                       <input type="checkbox" id="group-replace-existing" checked />
@@ -155,7 +175,7 @@
             </div>
           </div>
 
-          <p class="helper">Algoritmo, tipo e corredor H3 são definidos individualmente.</p>
+          <p class="helper">Algoritmo, tipo, ordenação das paradas e corredor H3 são definidos individualmente.</p>
           <div class="configuration-organizer">
             <span id="configuration-summary">0 configurações</span>
             <div>
@@ -240,7 +260,7 @@
 
     <dialog id="deadline-dialog">
       <form id="deadline-form">
-        <div class="dialog-heading"><div><h2 id="deadline-title">Prazo da entrega</h2><p>Quanto tempo falta até o vencimento?</p></div><button id="close-deadline" type="button" aria-label="Fechar">×</button></div>
+        <div class="dialog-heading"><div><h2 id="deadline-title">Configurar entrega</h2><p>Informe quanto tempo falta para o prazo da entrega.</p></div><button id="close-deadline" type="button" aria-label="Fechar">×</button></div>
         <div class="deadline-parts">
           <label><input id="deadline-days" type="number" min="0" step="1" value="0" />Dias</label>
           <label><input id="deadline-hours" type="number" min="0" max="23" step="1" value="1" />Horas</label>
