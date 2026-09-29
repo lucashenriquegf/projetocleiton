@@ -47,22 +47,106 @@
           <div class="panel-heading">
             <div><span class="eyebrow">Concorrentes</span><h2>Configurações</h2></div>
             <div class="panel-header-actions">
-              <select id="template-select" class="template-select" title="Carregar template pré-definido">
-                <option value="">Templates de teste...</option>
-                <option value="all-40">Todas as 40 combinações possíveis</option>
-                <option value="no-h3-8">Sem H3 (8 variantes)</option>
-                <option value="h3-res9-8">Com H3 Resolução 9 (8 variantes)</option>
-                <option value="h3-all-res-32">Com H3 (Todas 32 resoluções)</option>
-                <option value="astar-all-10">A* Completo (10 variantes)</option>
-                <option value="dijkstra-all-10">Dijkstra Completo (10 variantes)</option>
-                <option value="bfs-all-10">BFS Completo (10 variantes)</option>
-                <option value="dfs-all-10">DFS Completo (10 variantes)</option>
-                <option value="default-2">Padrão inicial (2 variantes)</option>
-              </select>
+              <div class="group-dropdown-wrap">
+                <button id="group-add-toggle" class="secondary-button" type="button" aria-expanded="false" title="Adicionar múltiplos algoritmos e variações">
+                  Adição por grupo ▾
+                </button>
+                <div id="group-add-menu" class="group-add-menu" hidden>
+
+
+                  <div class="group-dropdown-header">
+                    <strong>Adição por grupo</strong>
+                  </div>
+
+                  <div class="group-section">
+                    <div class="group-section-title">
+                      <span>Algoritmos</span>
+                      <button type="button" id="select-all-algos" class="group-text-link">Desmarcar todos</button>
+                    </div>
+                    <div class="group-checkbox-grid">
+                      <label class="group-checkbox-label">
+                        <input type="checkbox" class="group-algo" value="dijkstra" checked />
+                        <span>Dijkstra</span>
+                      </label>
+                      <label class="group-checkbox-label">
+                        <input type="checkbox" class="group-algo" value="astar" checked />
+                        <span>A*</span>
+                      </label>
+                      <label class="group-checkbox-label">
+                        <input type="checkbox" class="group-algo" value="bfs" checked />
+                        <span>BFS</span>
+                      </label>
+                      <label class="group-checkbox-label">
+                        <input type="checkbox" class="group-algo" value="dfs" checked />
+                        <span>DFS</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  <div class="group-section">
+                    <div class="group-section-title">
+                      <span>Variações</span>
+                    </div>
+                    <label class="group-checkbox-label group-highlight-toggle">
+                      <input type="checkbox" id="group-all-variations" checked />
+                      <span>Todas variações possíveis (10 por algoritmo)</span>
+                    </label>
+
+                    <div id="group-custom-variations" class="group-custom-variations" style="display: none;">
+                      <div class="group-sublabel">Tipo:</div>
+                      <div class="group-checkbox-grid">
+                        <label class="group-checkbox-label">
+                          <input type="checkbox" class="group-model" value="normal" checked />
+                          <span>Normal</span>
+                        </label>
+                        <label class="group-checkbox-label">
+                          <input type="checkbox" class="group-model" value="bidirectional" checked />
+                          <span>Bidirecional</span>
+                        </label>
+                      </div>
+
+                      <div class="group-sublabel" style="margin-top: 7px;">Corredor H3:</div>
+                      <div class="group-checkbox-grid h3-grid">
+                        <label class="group-checkbox-label">
+                          <input type="checkbox" class="group-h3" value="none" checked />
+                          <span>Sem H3</span>
+                        </label>
+                        <label class="group-checkbox-label">
+                          <input type="checkbox" class="group-h3" value="7" checked />
+                          <span>Res 7</span>
+                        </label>
+                        <label class="group-checkbox-label">
+                          <input type="checkbox" class="group-h3" value="8" checked />
+                          <span>Res 8</span>
+                        </label>
+                        <label class="group-checkbox-label">
+                          <input type="checkbox" class="group-h3" value="9" checked />
+                          <span>Res 9</span>
+                        </label>
+                        <label class="group-checkbox-label">
+                          <input type="checkbox" class="group-h3" value="10" checked />
+                          <span>Res 10</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="group-footer">
+                    <label class="group-replace-label">
+                      <input type="checkbox" id="group-replace-existing" checked />
+                      <span>Substituir atuais</span>
+                    </label>
+                    <button type="button" id="group-confirm-add" class="primary-button compact">
+                      Adicionar (40)
+                    </button>
+                  </div>
+                </div>
+              </div>
               <button id="add-configuration" class="secondary-button" type="button">+ Adicionar</button>
               <button id="clear-configurations" class="text-button" type="button" title="Limpar todas as configurações">Limpar</button>
             </div>
           </div>
+
           <p class="helper">Algoritmo, tipo e corredor H3 são definidos individualmente.</p>
 
           <div id="configuration-list" class="configuration-list"></div>

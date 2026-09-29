@@ -40,11 +40,17 @@ const elements = {
   clearStops: document.querySelector("#clear-stops"),
   stopList: document.querySelector("#stop-list"),
   averageSpeed: document.querySelector("#average-speed"),
-  speedValue: document.querySelector("#speed-value"),
-  templateSelect: document.querySelector("#template-select"),
+  groupAddToggle: document.querySelector("#group-add-toggle"),
+  groupAddMenu: document.querySelector("#group-add-menu"),
+  selectAllAlgos: document.querySelector("#select-all-algos"),
+  groupAllVariations: document.querySelector("#group-all-variations"),
+  groupCustomVariations: document.querySelector("#group-custom-variations"),
+  groupConfirmAdd: document.querySelector("#group-confirm-add"),
+  groupReplaceExisting: document.querySelector("#group-replace-existing"),
   clearConfigurations: document.querySelector("#clear-configurations"),
   configurationList: document.querySelector("#configuration-list"),
   addConfiguration: document.querySelector("#add-configuration"),
+
 
   runComparison: document.querySelector("#run-comparison"),
   cancelComparison: document.querySelector("#cancel-comparison"),
@@ -122,12 +128,30 @@ function bindEvents() {
     invalidateResults();
   });
   elements.addConfiguration.addEventListener("click", () => addConfiguration());
-  elements.templateSelect.addEventListener("change", (event) => {
-    if (event.target.value) {
-      applyTemplate(event.target.value);
-      event.target.value = "";
+  elements.groupAddToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleGroupMenu();
+  });
+  elements.groupAddMenu.addEventListener("click", (event) => {
+    event.stopPropagation();
+  });
+  document.addEventListener("click", (event) => {
+    if (!elements.groupAddMenu.hidden && !elements.groupAddMenu.contains(event.target) && !elements.groupAddToggle.contains(event.target)) {
+      toggleGroupMenu(false);
     }
   });
+  elements.selectAllAlgos.addEventListener("click", () => {
+    const checkboxes = document.querySelectorAll(".group-algo");
+    const allChecked = Array.from(checkboxes).every((cb) => cb.checked);
+    checkboxes.forEach((cb) => { cb.checked = !allChecked; });
+    updateGroupCalculations();
+  });
+  document.querySelectorAll(".group-algo, .group-model, .group-h3").forEach((cb) => {
+    cb.addEventListener("change", updateGroupCalculations);
+  });
+  elements.groupAllVariations.addEventListener("change", updateGroupCalculations);
+  elements.groupConfirmAdd.addEventListener("click", handleGroupConfirmAdd);
+
 
   elements.clearConfigurations.addEventListener("click", clearConfigurations);
   elements.runComparison.addEventListener("click", runComparison);
@@ -305,83 +329,117 @@ function addConfiguration(template = null) {
   invalidateResults();
 }
 
-function generateAllCombinations() {
-  const configs = [];
-  const algorithms = ["astar", "dijkstra", "bfs", "dfs"];
-  const modelTypes = ["normal", "bidirectional"];
-  const h3Variations = [
-    { useH3: false, h3Resolution: 9 },
-    { useH3: true, h3Resolution: 7 },
-    { useH3: true, h3Resolution: 8 },
-    { useH3: true, h3Resolution: 9 },
-    { useH3: true, h3Resolution: 10 },
-  ];
+function toggleGroupMenu(forceState) {
+  if (state.currentController) return;
+  const isHidden = typeof forceState === "boolean" ? !forceState : !elements.groupAddMenu.hidden;
+  elements.groupAddMenu.hidden = isHidden;
+  elements.groupAddToggle.setAttribute("aria-expanded", String(!isHidden));
+  if (!isHidden) {
+    updateGroupCalculations();
+  }
+}
 
-  for (const algorithm of algorithms) {
+function updateGroupCalculations() {
+  const selectedAlgos = Array.from(document.querySelectorAll(".group-algo:checked")).map((el) => el.value);
+  const allVariations = elements.groupAllVariations.checked;
+  elements.groupCustomVariations.style.display = allVariations ? "none" : "block";
+
+  let variationsCount = 0;
+  if (allVariations) {
+    variationsCount = 10;
+  } else {
+    const selectedModels = Array.from(document.querySelectorAll(".group-model:checked")).map((el) => el.value);
+    const selectedH3 = Array.from(document.querySelectorAll(".group-h3:checked")).map((el) => el.value);
+    variationsCount = selectedModels.length * selectedH3.length;
+  }
+
+  const totalConfigs = selectedAlgos.length * variationsCount;
+
+  if (totalConfigs > 0) {
+    elements.groupConfirmAdd.disabled = false;
+    elements.groupConfirmAdd.textContent = `Adicionar (${totalConfigs})`;
+  } else {
+    elements.groupConfirmAdd.disabled = true;
+    elements.groupConfirmAdd.textContent = "Selecione ao menos 1";
+  }
+
+  const totalAlgos = document.querySelectorAll(".group-algo").length;
+  if (selectedAlgos.length === totalAlgos) {
+    elements.selectAllAlgos.textContent = "Desmarcar todos";
+  } else {
+    elements.selectAllAlgos.textContent = "Marcar todos";
+  }
+
+  return { selectedAlgos, allVariations, totalConfigs };
+}
+
+function handleGroupConfirmAdd() {
+  if (state.currentController) return;
+  const selectedAlgos = Array.from(document.querySelectorAll(".group-algo:checked")).map((el) => el.value);
+  if (!selectedAlgos.length) return;
+
+  const allVariations = elements.groupAllVariations.checked;
+  let variations = [];
+
+  if (allVariations) {
+    const modelTypes = ["normal", "bidirectional"];
+    const h3Variations = [
+      { useH3: false, h3Resolution: 9 },
+      { useH3: true, h3Resolution: 7 },
+      { useH3: true, h3Resolution: 8 },
+      { useH3: true, h3Resolution: 9 },
+      { useH3: true, h3Resolution: 10 },
+    ];
     for (const modelType of modelTypes) {
       for (const h3Var of h3Variations) {
-        configs.push({
-          algorithm,
+        variations.push({
           modelType,
           useH3: h3Var.useH3,
           h3Resolution: h3Var.h3Resolution,
         });
       }
     }
-  }
-  return configs;
-}
-
-function generateFilteredCombinations(filter = {}) {
-  return generateAllCombinations().filter((config) => {
-    for (const [key, value] of Object.entries(filter)) {
-      if (config[key] !== value) return false;
+  } else {
+    const selectedModels = Array.from(document.querySelectorAll(".group-model:checked")).map((el) => el.value);
+    const selectedH3 = Array.from(document.querySelectorAll(".group-h3:checked")).map((el) => el.value);
+    for (const modelType of selectedModels) {
+      for (const h3Opt of selectedH3) {
+        variations.push({
+          modelType,
+          useH3: h3Opt !== "none",
+          h3Resolution: h3Opt === "none" ? 9 : Number(h3Opt),
+        });
+      }
     }
-    return true;
-  });
-}
-
-function applyTemplate(templateKey) {
-  if (state.currentController) return;
-  let newConfigs = [];
-
-  switch (templateKey) {
-    case "all-40":
-      newConfigs = generateAllCombinations();
-      break;
-    case "no-h3-8":
-      newConfigs = generateFilteredCombinations({ useH3: false });
-      break;
-    case "h3-res9-8":
-      newConfigs = generateFilteredCombinations({ useH3: true, h3Resolution: 9 });
-      break;
-    case "h3-all-res-32":
-      newConfigs = generateFilteredCombinations({ useH3: true });
-      break;
-    case "astar-all-10":
-      newConfigs = generateFilteredCombinations({ algorithm: "astar" });
-      break;
-    case "dijkstra-all-10":
-      newConfigs = generateFilteredCombinations({ algorithm: "dijkstra" });
-      break;
-    case "bfs-all-10":
-      newConfigs = generateFilteredCombinations({ algorithm: "bfs" });
-      break;
-    case "dfs-all-10":
-      newConfigs = generateFilteredCombinations({ algorithm: "dfs" });
-      break;
-    case "default-2":
-      newConfigs = [
-        { algorithm: "astar", modelType: "normal", useH3: true, h3Resolution: 9 },
-        { algorithm: "astar", modelType: "bidirectional", useH3: false, h3Resolution: 9 },
-      ];
-      break;
-    default:
-      return;
   }
 
-  loadConfigurations(newConfigs);
+  if (!variations.length) return;
+
+  const newConfigs = [];
+  for (const algo of selectedAlgos) {
+    for (const variation of variations) {
+      newConfigs.push({
+        algorithm: algo,
+        modelType: variation.modelType,
+        useH3: variation.useH3,
+        h3Resolution: variation.h3Resolution,
+      });
+    }
+  }
+
+  const replace = elements.groupReplaceExisting.checked;
+  if (replace) {
+    loadConfigurations(newConfigs);
+  } else {
+    for (const config of newConfigs) {
+      addConfiguration(config);
+    }
+    showToast(`${newConfigs.length} configurações adicionadas.`);
+  }
+
+  toggleGroupMenu(false);
 }
+
 
 function loadConfigurations(configsList) {
   if (state.currentController) return;
@@ -805,9 +863,11 @@ function cancelComparison() {
 }
 
 function setConfigurationControlsDisabled(disabled) {
-  if (elements.templateSelect) elements.templateSelect.disabled = disabled;
+  if (elements.groupAddToggle) elements.groupAddToggle.disabled = disabled;
+  if (disabled && elements.groupAddMenu && !elements.groupAddMenu.hidden) toggleGroupMenu(false);
   if (elements.clearConfigurations) elements.clearConfigurations.disabled = disabled;
   elements.configurationList.querySelectorAll("button, select, input").forEach((control) => { control.disabled = disabled; });
+
 
   if (!disabled) {
     elements.configurationList.querySelectorAll(".configuration-card").forEach((card) => {
