@@ -1,7 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 
-const DEFAULT_MAP_ORDER = ["goiania", "inhumas", "goias", "sao-paulo"];
+const DEFAULT_MAP_ORDER = ["sao-paulo", "goiania", "inhumas", "goias"];
 
 function mapIdFromFilename(filename) {
   return path.basename(filename, path.extname(filename))
@@ -68,7 +68,7 @@ function listMaps(mapsDir) {
 }
 
 function getDefaultMapId(maps) {
-  return maps.find((map) => map.id === "goiania")?.id || maps[0]?.id || null;
+  return maps.find((map) => map.id === "sao-paulo")?.id || maps.find((map) => map.id === "goiania")?.id || maps[0]?.id || null;
 }
 
 function toPublicMap(map) {

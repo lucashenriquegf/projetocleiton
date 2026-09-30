@@ -37,6 +37,34 @@
             <button class="stop-button pickup" type="button" data-stop-type="pickup"><span>↓</span>Coleta</button>
             <button class="stop-button delivery" type="button" data-stop-type="delivery"><span>↑</span>Entrega</button>
           </div>
+          <div class="presets-container">
+            <div class="presets-header">
+              <span class="presets-title">Presets de pontos</span>
+              <div class="presets-io-actions">
+                <button id="export-preset-btn" class="preset-action-link" type="button" title="Exportar presets para arquivo JSON">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Exportar
+                </button>
+                <label class="preset-action-link file-label" title="Importar presets de arquivo JSON">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                  Importar
+                  <input id="import-preset-input" type="file" accept=".json,application/json" hidden />
+                </label>
+              </div>
+            </div>
+            <div class="presets-row">
+              <select id="preset-select" class="preset-dropdown">
+                <option value="">Selecione um preset…</option>
+              </select>
+              <button id="save-preset-btn" class="preset-btn save-btn" type="button" title="Salvar pontos atuais como preset">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                <span>Salvar</span>
+              </button>
+              <button id="delete-preset-btn" class="preset-btn delete-btn" type="button" title="Excluir preset selecionado" disabled>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              </button>
+            </div>
+          </div>
           <div class="scenario-map-wrap">
             <div id="scenario-map"></div>
             <div id="map-instruction" class="map-instruction" hidden>Clique no mapa para adicionar o ponto</div>
@@ -267,6 +295,29 @@
           <label><input id="deadline-minutes" type="number" min="0" max="59" step="1" value="0" />Minutos</label>
         </div>
         <div class="dialog-actions"><button id="cancel-deadline" class="secondary-button" type="button">Cancelar</button><button class="primary-button compact" type="submit">Salvar prazo</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="preset-save-dialog">
+      <form id="preset-save-form">
+        <div class="dialog-heading">
+          <div>
+            <h2 id="preset-save-title">Salvar preset de pontos</h2>
+            <p>Salve a configuração atual de coletas e entregas no navegador.</p>
+          </div>
+          <button id="close-preset-dialog" type="button" aria-label="Fechar">×</button>
+        </div>
+
+        <div class="preset-name-field" style="margin-top: 18px; display: flex; flex-direction: column; gap: 6px;">
+          <label for="preset-name-input" style="font-size: 11px; font-weight: 700; color: #4b5950;">Nome do preset</label>
+          <input id="preset-name-input" type="text" placeholder="Ex: Rota Centro - 4 Entregas" required style="width: 100%; padding: 10px 12px; border: 1px solid #ccd5cf; border-radius: 8px; font-size: 12px; color: var(--ink);" />
+          <small id="preset-stops-summary" style="font-size: 10px; color: var(--muted); margin-top: 4px;"></small>
+        </div>
+
+        <div class="dialog-actions">
+          <button id="cancel-preset-save" class="secondary-button" type="button">Cancelar</button>
+          <button class="primary-button compact" type="submit">Salvar preset</button>
+        </div>
       </form>
     </dialog>
 

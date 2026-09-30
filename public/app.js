@@ -27,6 +27,17 @@ import { greedyBestFirst } from "/algorithms/GreedyBestFirst.js";
 import { beamSearch } from "/algorithms/BeamSearch.js";
 import { bidirectionalGreedyBestFirst } from "/algorithms/BidirectionalGreedyBestFirst.js";
 import { bidirectionalBeamSearch } from "/algorithms/BidirectionalBeamSearch.js";
+import {
+  exportPresetsJson,
+  exportCalculatedRouteJson,
+  importPresetsFromJson,
+  loadSavedPresets,
+  savePresetToStorage,
+  deletePresetFromStorage,
+  mergeImportedPresetsToStorage,
+  serializeStops,
+  triggerFileDownload,
+} from "/pointPresets.js";
 
 const state = {
   graph: null,
@@ -67,6 +78,7 @@ const elements = {
   orderHint: document.querySelector("#order-hint"),
   clearRoute: document.querySelector("#clear-route"),
   calculateRoute: document.querySelector("#calculate-route"),
+  exportCalculatedRoute: document.querySelector("#export-calculated-route"),
   cancelCalculation: document.querySelector("#cancel-calculation"),
   calculationNote: document.querySelector("#calculation-note"),
   algorithm: document.querySelector("#algorithm"),
@@ -108,11 +120,23 @@ const elements = {
   deadlineMinutes: document.querySelector("#deadline-minutes"),
   closeDeliveryDialog: document.querySelector("#close-delivery-dialog"),
   cancelDelivery: document.querySelector("#cancel-delivery"),
+  presetSelect: document.querySelector("#preset-select"),
+  savePresetBtn: document.querySelector("#save-preset-btn"),
+  deletePresetBtn: document.querySelector("#delete-preset-btn"),
+  exportPresetBtn: document.querySelector("#export-preset-btn"),
+  importPresetInput: document.querySelector("#import-preset-input"),
+  presetSaveDialog: document.querySelector("#preset-save-dialog"),
+  presetSaveForm: document.querySelector("#preset-save-form"),
+  presetNameInput: document.querySelector("#preset-name-input"),
+  presetStopsSummary: document.querySelector("#preset-stops-summary"),
+  closePresetDialog: document.querySelector("#close-preset-dialog"),
+  cancelPresetSave: document.querySelector("#cancel-preset-save"),
 };
 
 async function initialize() {
   initializeMap();
   bindInterfaceEvents();
+  renderPresetsDropdown();
 
   try {
     await loadMapCatalog();
@@ -146,9 +170,9 @@ async function loadMapCatalog() {
   } catch {
     // O seletor continua funcionando mesmo quando o armazenamento local está indisponível.
   }
-  const initialMapId = catalog.maps.some((map) => map.id === storedMapId)
+  const initialMapId = catalog.defaultMapId || (catalog.maps.some((map) => map.id === storedMapId)
     ? storedMapId
-    : catalog.defaultMapId || catalog.maps[0].id;
+    : catalog.maps[0].id);
   elements.mapSelect.value = initialMapId;
   await loadRoadNetwork(initialMapId, { initial: true });
 }
@@ -338,6 +362,323 @@ function bindInterfaceEvents() {
   elements.deliveryDialog.addEventListener("close", () => {
     state.editingStopId = null;
   });
+
+  elements.presetSelect?.addEventListener("change", () => {
+    const selectedId = elements.presetSelect.value;
+    if (elements.deletePresetBtn) elements.deletePresetBtn.disabled = !selectedId;
+    if (selectedId) {
+      const presets = loadSavedPresets();
+      const preset = presets.find((p) => p.id === selectedId);
+      if (preset) applyPreset(preset);
+    }
+  });
+  elements.exportCalculatedRoute?.addEventListener("click", handleExportCalculatedRoute);
+  elements.savePresetBtn?.addEventListener("click", openSavePresetDialog);
+  elements.deletePresetBtn?.addEventListener("click", handleDeletePreset);
+  elements.exportPresetBtn?.addEventListener("click", handleExportPresets);
+  elements.importPresetInput?.addEventListener("change", handleImportPresets);
+  elements.closePresetDialog?.addEventListener("click", closeSavePresetDialog);
+  elements.cancelPresetSave?.addEventListener("click", closeSavePresetDialog);
+  elements.presetSaveForm?.addEventListener("submit", handleSavePresetSubmit);
+}
+
+function renderPresetsDropdown(selectedId = null) {
+  if (!elements.presetSelect) return;
+  const presets = loadSavedPresets();
+  elements.presetSelect.innerHTML = "";
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "Selecione um preset…";
+  elements.presetSelect.appendChild(defaultOption);
+
+  presets.forEach((preset) => {
+    const opt = document.createElement("option");
+    opt.value = preset.id;
+    const mapTag = preset.mapLabel ? ` [${preset.mapLabel.split(",")[0]}]` : "";
+    opt.textContent = `${preset.name} (${preset.stops.length} pts)${mapTag}`;
+    elements.presetSelect.appendChild(opt);
+  });
+
+  if (selectedId && presets.some((p) => p.id === selectedId)) {
+    elements.presetSelect.value = selectedId;
+  } else {
+    elements.presetSelect.value = "";
+  }
+  if (elements.deletePresetBtn) {
+    elements.deletePresetBtn.disabled = !elements.presetSelect.value;
+  }
+}
+
+async function applyPreset(preset) {
+  if (!preset || !Array.isArray(preset.stops) || preset.stops.length === 0) {
+    showToast("O preset selecionado não contém pontos.", true);
+    return;
+  }
+
+  // Se o preset pertencer a outro mapa disponível no catálogo, carrega a malha correspondente primeiro
+  if (preset.mapId && preset.mapId !== state.selectedMapId) {
+    const availableMaps = Array.from(elements.mapSelect.options).map((o) => o.value);
+    if (availableMaps.includes(preset.mapId)) {
+      showToast(`Alternando para o mapa de ${preset.mapLabel || preset.mapId}…`);
+      try {
+        await loadRoadNetwork(preset.mapId);
+      } catch (err) {
+        showToast(`Erro ao carregar o mapa do preset: ${err.message}`, true);
+        return;
+      }
+    }
+  }
+
+  clearAllStops();
+
+  let connectedCount = 0;
+  preset.stops.forEach((stopItem) => {
+    const edge = findNearestEdge(state.routingGraph, stopItem.latitude, stopItem.longitude);
+    if (!edge) return;
+
+    connectedCount += 1;
+    state.counters[stopItem.type] += 1;
+    const typeName = stopItem.type === "pickup" ? "Coleta" : "Entrega";
+    const stop = {
+      id: `${stopItem.type}-${Date.now()}-${state.counters[stopItem.type]}-${Math.random().toString(36).slice(2, 6)}`,
+      type: stopItem.type,
+      name: stopItem.name || `${typeName} ${state.counters[stopItem.type]}`,
+      roadName: edge.roadName || stopItem.roadName || "Via local sem nome",
+      edgeIndex: edge.edgeIndex,
+      latitude: edge.latitude,
+      longitude: edge.longitude,
+      marker: null,
+      deadline: stopItem.type === "delivery"
+        ? (stopItem.deadlineMinutes
+            ? new Date(Date.now() + stopItem.deadlineMinutes * 60_000).toISOString()
+            : (stopItem.deadline && Number.isFinite(Date.parse(stopItem.deadline)) && new Date(stopItem.deadline) > new Date()
+                ? stopItem.deadline
+                : new Date(Date.now() + 60 * 60_000).toISOString()))
+        : null,
+    };
+
+    stop.marker = createStopMarker(stop);
+    state.stops.push(stop);
+  });
+
+  renderStops();
+
+  if (state.stops.length > 0) {
+    const bounds = L.latLngBounds(state.stops.map((s) => [s.latitude, s.longitude]));
+    if (bounds.isValid()) {
+      state.map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    }
+  }
+
+  if (preset.settings && typeof preset.settings === "object") {
+    if (preset.settings.algorithm && elements.algorithm) {
+      elements.algorithm.value = preset.settings.algorithm;
+    }
+    if (preset.settings.modelType && elements.modelType) {
+      elements.modelType.value = preset.settings.modelType;
+    }
+    if (preset.settings.orderStrategy && elements.orderStrategy) {
+      elements.orderStrategy.value = preset.settings.orderStrategy;
+      if (elements.ilsControls) {
+        elements.ilsControls.hidden = preset.settings.orderStrategy !== "ils";
+      }
+    }
+    if (preset.settings.orderBudget && elements.orderBudget) {
+      elements.orderBudget.value = String(preset.settings.orderBudget);
+    }
+    if (preset.settings.averageSpeed && elements.averageSpeed) {
+      elements.averageSpeed.value = String(preset.settings.averageSpeed);
+      if (elements.speedValue) elements.speedValue.textContent = String(preset.settings.averageSpeed);
+    }
+    if (preset.settings.useH3 !== undefined && elements.h3Toggle) {
+      elements.h3Toggle.checked = Boolean(preset.settings.useH3);
+      state.useH3Corridor = elements.h3Toggle.checked;
+      if (elements.h3Controls) {
+        elements.h3Controls.style.display = state.useH3Corridor ? "flex" : "none";
+      }
+    }
+    if (preset.settings.h3Resolution && elements.h3Res) {
+      elements.h3Res.value = String(preset.settings.h3Resolution);
+      state.h3Resolution = Number(preset.settings.h3Resolution);
+      if (elements.h3ResValue) elements.h3ResValue.textContent = String(state.h3Resolution);
+    }
+    if (preset.settings.returnToStart !== undefined && elements.returnToStart) {
+      elements.returnToStart.checked = Boolean(preset.settings.returnToStart);
+    }
+  }
+
+  if (preset.calculatedRoute && Array.isArray(preset.calculatedRoute.coordinates) && preset.calculatedRoute.coordinates.length >= 2) {
+    state.lastRoute = preset.calculatedRoute;
+    drawRoute(state.lastRoute);
+    renderRouteSummary(state.lastRoute, false);
+    if (elements.exportCalculatedRoute) elements.exportCalculatedRoute.hidden = false;
+    elements.calculateRoute.querySelector("span").textContent = "Recalcular rota";
+    showToast(`Rota calculada "${preset.name}" importada com sucesso!`);
+  } else {
+    invalidateRoute();
+    if (elements.exportCalculatedRoute) elements.exportCalculatedRoute.hidden = true;
+    if (connectedCount === 0) {
+      showToast("Não foi possível conectar os pontos do preset à malha viária atual.", true);
+    } else {
+      showToast(`Preset "${preset.name}" carregado com ${connectedCount} paradas.`);
+    }
+  }
+}
+
+function openSavePresetDialog() {
+  if (state.stops.length === 0) {
+    showToast("Adicione pontos no mapa antes de salvar um preset.", true);
+    return;
+  }
+  const pickups = state.stops.filter((s) => s.type === "pickup").length;
+  const deliveries = state.stops.filter((s) => s.type === "delivery").length;
+  const mapOption = elements.mapSelect?.selectedOptions[0];
+  const mapLabel = mapOption ? mapOption.textContent : state.selectedMapId || "";
+
+  elements.presetStopsSummary.textContent = `${pickups} ${pluralize(pickups, "coleta", "coletas")} • ${deliveries} ${pluralize(deliveries, "entrega", "entregas")} • ${mapLabel}`;
+  elements.presetNameInput.value = `Rota ${mapLabel ? mapLabel.split(",")[0] : ""} (${state.stops.length} pts)`.trim();
+  elements.presetSaveDialog.showModal();
+  elements.presetNameInput.focus();
+  elements.presetNameInput.select();
+}
+
+function closeSavePresetDialog() {
+  if (elements.presetSaveDialog.open) {
+    elements.presetSaveDialog.close();
+  }
+}
+
+function handleSavePresetSubmit(event) {
+  event.preventDefault();
+  const name = elements.presetNameInput.value.trim();
+  if (!name) {
+    showToast("Informe um nome para o preset.", true);
+    return;
+  }
+
+  const mapOption = elements.mapSelect?.selectedOptions[0];
+  const mapLabel = mapOption ? mapOption.textContent : state.selectedMapId || "";
+  const stops = serializeStops(state.stops);
+
+  try {
+    const { preset } = savePresetToStorage({
+      name,
+      mapId: state.selectedMapId,
+      mapLabel,
+      stops,
+    });
+    closeSavePresetDialog();
+    renderPresetsDropdown(preset.id);
+    showToast(`Preset "${preset.name}" salvo no navegador!`);
+  } catch (err) {
+    showToast(`Erro ao salvar preset: ${err.message}`, true);
+  }
+}
+
+function handleDeletePreset() {
+  const presetId = elements.presetSelect.value;
+  if (!presetId) return;
+
+  const presets = loadSavedPresets();
+  const preset = presets.find((p) => p.id === presetId);
+  const name = preset ? preset.name : "este preset";
+
+  if (!window.confirm(`Deseja realmente excluir o preset "${name}"?`)) {
+    return;
+  }
+
+  deletePresetFromStorage(presetId);
+  renderPresetsDropdown();
+  showToast(`Preset "${name}" excluído.`);
+}
+
+function handleExportPresets() {
+  const presets = loadSavedPresets();
+  if (!presets.length) {
+    showToast("Não há presets salvos para exportar.", true);
+    return;
+  }
+
+  const selectedId = elements.presetSelect.value;
+  if (selectedId) {
+    const single = presets.find((p) => p.id === selectedId);
+    if (single) {
+      const json = exportPresetsJson(single);
+      const safeName = single.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      triggerFileDownload(`preset-${safeName || "rota"}.json`, json);
+      showToast(`Preset "${single.name}" exportado com sucesso!`);
+      return;
+    }
+  }
+
+  const json = exportPresetsJson(presets);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  triggerFileDownload(`presets-rotas-${dateStr}.json`, json);
+  showToast(`${presets.length} presets exportados em arquivo JSON!`);
+}
+
+function handleExportCalculatedRoute() {
+  if (!state.lastRoute) {
+    showToast("Nenhuma rota calculada para exportar.", true);
+    return;
+  }
+
+  const mapOption = elements.mapSelect?.selectedOptions[0];
+  const mapLabel = mapOption ? mapOption.textContent : state.selectedMapId || "";
+  const cityName = mapLabel ? mapLabel.split(",")[0].trim() : "Rota";
+
+  const settings = {
+    algorithm: elements.algorithm?.value || state.lastRoute.algorithm,
+    modelType: elements.modelType?.value || state.lastRoute.modelType,
+    orderStrategy: elements.orderStrategy?.value || state.lastRoute.orderInfo?.strategy,
+    orderBudget: Number(elements.orderBudget?.value) || 500,
+    averageSpeed: Number(elements.averageSpeed?.value) || 40,
+    useH3: state.useH3Corridor,
+    h3Resolution: state.h3Resolution,
+    returnToStart: elements.returnToStart?.checked || state.lastRoute.returnToStart,
+  };
+
+  const name = `Rota Calculada - ${cityName} (${state.stops.length} pts)`;
+  const jsonContent = exportCalculatedRouteJson({
+    name,
+    mapId: state.selectedMapId,
+    mapLabel,
+    settings,
+    stops: state.stops,
+    route: state.lastRoute,
+  });
+
+  const safeCity = cityName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const algo = state.lastRoute.algorithm || "rota";
+  const dateStr = new Date().toISOString().slice(0, 10);
+  const filename = `rota-calculada-${safeCity || "cidade"}-${algo}-${dateStr}.json`;
+  triggerFileDownload(filename, jsonContent);
+  showToast("Rota calculada exportada com sucesso!");
+}
+
+function handleImportPresets(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  event.target.value = "";
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const content = e.target.result;
+      const imported = importPresetsFromJson(content);
+      mergeImportedPresetsToStorage(imported);
+      renderPresetsDropdown(imported[0].id);
+      showToast(`${imported.length} ${pluralize(imported.length, "preset importado", "presets importados")}!`);
+      await applyPreset(imported[0]);
+    } catch (err) {
+      showToast(`Falha na importação: ${err.message}`, true);
+    }
+  };
+  reader.onerror = () => {
+    showToast("Erro ao ler arquivo selecionado.", true);
+  };
+  reader.readAsText(file);
 }
 
 function clearCorridorLayers() {
@@ -595,6 +936,7 @@ function invalidateRoute() {
   state.lastRoute = null;
   elements.routeSummary.hidden = true;
   elements.calculateRoute.querySelector("span").textContent = "Calcular rota";
+  if (elements.exportCalculatedRoute) elements.exportCalculatedRoute.hidden = true;
 }
 
 function cancelCalculation() {
@@ -768,6 +1110,7 @@ async function calculateRoute() {
   drawRoute(state.lastRoute);
   renderRouteSummary(state.lastRoute);
   elements.calculateRoute.querySelector("span").textContent = "Recalcular rota";
+  if (elements.exportCalculatedRoute) elements.exportCalculatedRoute.hidden = false;
   showToast("Rota calculada.");
 }
 

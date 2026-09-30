@@ -10,6 +10,16 @@ import {
   recommendComparisonWorkerCount,
   runRouteConfiguration,
 } from "/algorithms/routeComparison.js";
+import {
+  exportPresetsJson,
+  importPresetsFromJson,
+  loadSavedPresets,
+  savePresetToStorage,
+  deletePresetFromStorage,
+  mergeImportedPresetsToStorage,
+  serializeStops,
+  triggerFileDownload,
+} from "/pointPresets.js";
 
 const COLORS = ["#176b43", "#2563a7", "#dc6d2d", "#7c3ba8", "#b2455b", "#14818b", "#7a6420", "#4f5db6"];
 const ALGORITHM_LABELS = {
@@ -103,6 +113,17 @@ const elements = {
   deadlineMinutes: document.querySelector("#deadline-minutes"),
   closeDeadline: document.querySelector("#close-deadline"),
   cancelDeadline: document.querySelector("#cancel-deadline"),
+  presetSelect: document.querySelector("#preset-select"),
+  savePresetBtn: document.querySelector("#save-preset-btn"),
+  deletePresetBtn: document.querySelector("#delete-preset-btn"),
+  exportPresetBtn: document.querySelector("#export-preset-btn"),
+  importPresetInput: document.querySelector("#import-preset-input"),
+  presetSaveDialog: document.querySelector("#preset-save-dialog"),
+  presetSaveForm: document.querySelector("#preset-save-form"),
+  presetNameInput: document.querySelector("#preset-name-input"),
+  presetStopsSummary: document.querySelector("#preset-stops-summary"),
+  closePresetDialog: document.querySelector("#close-preset-dialog"),
+  cancelPresetSave: document.querySelector("#cancel-preset-save"),
   toast: document.querySelector("#toast"),
 };
 
@@ -111,6 +132,7 @@ initialize();
 async function initialize() {
   initializeScenarioMap();
   bindEvents();
+  renderPresetsDropdown();
   addConfiguration({ algorithm: "astar", modelType: "normal", useH3: true, h3Resolution: 9 });
   addConfiguration({ algorithm: "astar", modelType: "bidirectional", useH3: false, h3Resolution: 9 });
 
@@ -146,9 +168,9 @@ async function loadMapCatalog() {
   } catch {
     // O armazenamento local é opcional.
   }
-  const initialMapId = catalog.maps.some((map) => map.id === storedMapId)
+  const initialMapId = catalog.defaultMapId || (catalog.maps.some((map) => map.id === storedMapId)
     ? storedMapId
-    : catalog.defaultMapId || catalog.maps[0].id;
+    : catalog.maps[0].id);
   elements.mapSelect.value = initialMapId;
   await loadRoadNetwork(initialMapId, { initial: true });
 }
@@ -312,6 +334,245 @@ function bindEvents() {
   elements.closeDeadline.addEventListener("click", closeDeadlineDialog);
   elements.cancelDeadline.addEventListener("click", closeDeadlineDialog);
   elements.deadlineDialog.addEventListener("close", () => { state.editingStopId = null; });
+
+  elements.presetSelect?.addEventListener("change", () => {
+    const selectedId = elements.presetSelect.value;
+    if (elements.deletePresetBtn) elements.deletePresetBtn.disabled = !selectedId;
+    if (selectedId) {
+      const presets = loadSavedPresets();
+      const preset = presets.find((p) => p.id === selectedId);
+      if (preset) applyPreset(preset);
+    }
+  });
+  elements.savePresetBtn?.addEventListener("click", openSavePresetDialog);
+  elements.deletePresetBtn?.addEventListener("click", handleDeletePreset);
+  elements.exportPresetBtn?.addEventListener("click", handleExportPresets);
+  elements.importPresetInput?.addEventListener("change", handleImportPresets);
+  elements.closePresetDialog?.addEventListener("click", closeSavePresetDialog);
+  elements.cancelPresetSave?.addEventListener("click", closeSavePresetDialog);
+  elements.presetSaveForm?.addEventListener("submit", handleSavePresetSubmit);
+}
+
+function renderPresetsDropdown(selectedId = null) {
+  if (!elements.presetSelect) return;
+  const presets = loadSavedPresets();
+  elements.presetSelect.innerHTML = "";
+
+  const defaultOption = document.createElement("option");
+  defaultOption.value = "";
+  defaultOption.textContent = "Selecione um preset…";
+  elements.presetSelect.appendChild(defaultOption);
+
+  presets.forEach((preset) => {
+    const opt = document.createElement("option");
+    opt.value = preset.id;
+    const mapTag = preset.mapLabel ? ` [${preset.mapLabel.split(",")[0]}]` : "";
+    opt.textContent = `${preset.name} (${preset.stops.length} pts)${mapTag}`;
+    elements.presetSelect.appendChild(opt);
+  });
+
+  if (selectedId && presets.some((p) => p.id === selectedId)) {
+    elements.presetSelect.value = selectedId;
+  } else {
+    elements.presetSelect.value = "";
+  }
+  if (elements.deletePresetBtn) {
+    elements.deletePresetBtn.disabled = !elements.presetSelect.value;
+  }
+}
+
+async function applyPreset(preset) {
+  if (state.currentController) return;
+  if (!preset || !Array.isArray(preset.stops) || preset.stops.length === 0) {
+    showToast("O preset selecionado não contém pontos.", true);
+    return;
+  }
+
+  if (preset.mapId && preset.mapId !== state.selectedMapId) {
+    const availableMaps = Array.from(elements.mapSelect.options).map((o) => o.value);
+    if (availableMaps.includes(preset.mapId)) {
+      showToast(`Alternando para o mapa de ${preset.mapLabel || preset.mapId}…`);
+      try {
+        await loadRoadNetwork(preset.mapId);
+      } catch (err) {
+        showToast(`Erro ao carregar o mapa do preset: ${err.message}`, true);
+        return;
+      }
+    }
+  }
+
+  clearStops();
+
+  let connectedCount = 0;
+  preset.stops.forEach((stopItem) => {
+    const edge = findNearestEdge(state.routingGraph, stopItem.latitude, stopItem.longitude);
+    if (!edge) return;
+
+    connectedCount += 1;
+    state.counters[stopItem.type] += 1;
+    const typeName = stopItem.type === "pickup" ? "Coleta" : "Entrega";
+    const stop = {
+      id: `${stopItem.type}-${Date.now()}-${state.counters[stopItem.type]}-${Math.random().toString(36).slice(2, 6)}`,
+      type: stopItem.type,
+      name: stopItem.name || `${typeName} ${state.counters[stopItem.type]}`,
+      roadName: edge.roadName || stopItem.roadName || "Via local sem nome",
+      edgeIndex: edge.edgeIndex,
+      latitude: edge.latitude,
+      longitude: edge.longitude,
+      deadline: stopItem.type === "delivery"
+        ? (stopItem.deadlineMinutes
+            ? new Date(Date.now() + stopItem.deadlineMinutes * 60_000).toISOString()
+            : (stopItem.deadline && Number.isFinite(Date.parse(stopItem.deadline)) && new Date(stopItem.deadline) > new Date()
+                ? stopItem.deadline
+                : new Date(Date.now() + 60 * 60_000).toISOString()))
+        : null,
+      marker: null,
+    };
+    stop.marker = createScenarioMarker(stop);
+    state.stops.push(stop);
+  });
+
+  renderStops();
+  invalidateResults();
+
+  if (preset.settings && typeof preset.settings === "object") {
+    if (preset.settings.averageSpeed && elements.averageSpeed) {
+      elements.averageSpeed.value = String(preset.settings.averageSpeed);
+      if (elements.speedValue) elements.speedValue.textContent = String(preset.settings.averageSpeed);
+    }
+    if (preset.settings.returnToStart !== undefined && elements.returnToStart) {
+      elements.returnToStart.checked = Boolean(preset.settings.returnToStart);
+    }
+  }
+
+  if (state.stops.length > 0) {
+    const bounds = L.latLngBounds(state.stops.map((s) => [s.latitude, s.longitude]));
+    if (bounds.isValid()) {
+      state.map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    }
+  }
+
+  if (connectedCount === 0) {
+    showToast("Não foi possível conectar os pontos do preset à malha viária atual.", true);
+  } else {
+    showToast(`Preset "${preset.name}" carregado com ${connectedCount} paradas.`);
+  }
+}
+
+function openSavePresetDialog() {
+  if (state.stops.length === 0) {
+    showToast("Adicione pontos no mapa antes de salvar um preset.", true);
+    return;
+  }
+  const pickups = state.stops.filter((s) => s.type === "pickup").length;
+  const deliveries = state.stops.filter((s) => s.type === "delivery").length;
+  const mapOption = elements.mapSelect?.selectedOptions[0];
+  const mapLabel = mapOption ? mapOption.textContent : state.selectedMapId || "";
+
+  elements.presetStopsSummary.textContent = `${pickups} ${pluralize(pickups, "coleta", "coletas")} • ${deliveries} ${pluralize(deliveries, "entrega", "entregas")} • ${mapLabel}`;
+  elements.presetNameInput.value = `Cenário ${mapLabel ? mapLabel.split(",")[0] : ""} (${state.stops.length} pts)`.trim();
+  elements.presetSaveDialog.showModal();
+  elements.presetNameInput.focus();
+  elements.presetNameInput.select();
+}
+
+function closeSavePresetDialog() {
+  if (elements.presetSaveDialog.open) {
+    elements.presetSaveDialog.close();
+  }
+}
+
+function handleSavePresetSubmit(event) {
+  event.preventDefault();
+  const name = elements.presetNameInput.value.trim();
+  if (!name) {
+    showToast("Informe um nome para o preset.", true);
+    return;
+  }
+
+  const mapOption = elements.mapSelect?.selectedOptions[0];
+  const mapLabel = mapOption ? mapOption.textContent : state.selectedMapId || "";
+  const stops = serializeStops(state.stops);
+
+  try {
+    const { preset } = savePresetToStorage({
+      name,
+      mapId: state.selectedMapId,
+      mapLabel,
+      stops,
+    });
+    closeSavePresetDialog();
+    renderPresetsDropdown(preset.id);
+    showToast(`Preset "${preset.name}" salvo no navegador!`);
+  } catch (err) {
+    showToast(`Erro ao salvar preset: ${err.message}`, true);
+  }
+}
+
+function handleDeletePreset() {
+  const presetId = elements.presetSelect.value;
+  if (!presetId) return;
+
+  const presets = loadSavedPresets();
+  const preset = presets.find((p) => p.id === presetId);
+  const name = preset ? preset.name : "este preset";
+
+  if (!window.confirm(`Deseja realmente excluir o preset "${name}"?`)) {
+    return;
+  }
+
+  deletePresetFromStorage(presetId);
+  renderPresetsDropdown();
+  showToast(`Preset "${name}" excluído.`);
+}
+
+function handleExportPresets() {
+  const presets = loadSavedPresets();
+  if (!presets.length) {
+    showToast("Não há presets salvos para exportar.", true);
+    return;
+  }
+
+  const selectedId = elements.presetSelect.value;
+  if (selectedId) {
+    const single = presets.find((p) => p.id === selectedId);
+    if (single) {
+      const json = exportPresetsJson(single);
+      const safeName = single.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+      triggerFileDownload(`preset-${safeName || "cenario"}.json`, json);
+      showToast(`Preset "${single.name}" exportado com sucesso!`);
+      return;
+    }
+  }
+
+  const json = exportPresetsJson(presets);
+  const dateStr = new Date().toISOString().slice(0, 10);
+  triggerFileDownload(`presets-rotas-${dateStr}.json`, json);
+  showToast(`${presets.length} presets exportados em arquivo JSON!`);
+}
+
+function handleImportPresets(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  event.target.value = "";
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const content = e.target.result;
+      const imported = importPresetsFromJson(content);
+      mergeImportedPresetsToStorage(imported);
+      renderPresetsDropdown(imported[0].id);
+      showToast(`${imported.length} ${pluralize(imported.length, "preset importado", "presets importados")}!`);
+      await applyPreset(imported[0]);
+    } catch (err) {
+      showToast(`Falha na importação: ${err.message}`, true);
+    }
+  };
+  reader.onerror = () => {
+    showToast("Erro ao ler arquivo selecionado.", true);
+  };
+  reader.readAsText(file);
 }
 
 function setAddMode(type) {
