@@ -1,0 +1,9 @@
+import { CheckCircle2, Clock3, History, PackageCheck, Route } from 'lucide-react';
+import Link from 'next/link';
+
+import { PersonaShell } from '@/components/layout/persona-shell';
+import { buttonVariants } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+
+export default function CompletedRoutePage() { return <PersonaShell persona="driver"><section className="border bg-white p-7 text-center sm:p-10"><span className="mx-auto grid size-16 place-items-center bg-primary text-white"><CheckCircle2 aria-hidden="true" className="size-8" /></span><p className="mt-6 text-xs font-semibold uppercase tracking-[0.12em] text-primary">Rota concluída</p><h1 className="mt-2 text-3xl font-semibold tracking-[-0.04em]">Bom trabalho, Carlos!</h1><p className="mx-auto mt-3 max-w-md text-sm leading-6 text-muted-foreground">A entrega foi registrada às 10h18. A divergência de alface já está disponível para o gestor.</p><dl className="mt-7 grid grid-cols-3 divide-x border-y py-5"><Fact icon={Clock3} label="Horário" value="10h18" /><Fact icon={Route} label="Paradas" value="6" /><Fact icon={PackageCheck} label="Entregue" value="420 itens" /></dl><div className="mt-7 grid gap-3 sm:grid-cols-2"><Link href="/rotas/rota-norte" className={cn(buttonVariants({ size: 'lg' }), 'h-14 rounded-none bg-[#245f0a] text-base')}>Ver resumo da rota</Link><Link href="/coletor/historico" className={cn(buttonVariants({ variant: 'outline', size: 'lg' }), 'h-14 rounded-none text-base')}><History aria-hidden="true" /> Ver histórico</Link></div></section></PersonaShell>; }
+function Fact({ icon: Icon, label, value }: { icon: typeof Clock3; label: string; value: string }) { return <div className="px-2"><Icon aria-hidden="true" className="mx-auto size-4 text-primary" /><dt className="mt-2 text-[10px] text-muted-foreground">{label}</dt><dd className="mt-1 text-sm font-semibold tabular-nums">{value}</dd></div>; }

@@ -1,0 +1,8 @@
+import { ArrowLeft, CalendarDays, Check, ChevronRight, Route } from 'lucide-react';
+import Link from 'next/link';
+
+import { DriverHeader } from '@/components/driver/driver-progress';
+import { PersonaShell } from '@/components/layout/persona-shell';
+import { driverHistory } from '@/lib/mocks/operations';
+
+export default function DriverHistoryPage() { return <PersonaShell persona="driver"><Link href="/coletor" className="mb-4 inline-flex min-h-11 items-center gap-2 text-sm text-muted-foreground"><ArrowLeft aria-hidden="true" className="size-4" /> Voltar para a rota de hoje</Link><DriverHeader eyebrow="Consulta" title="Rotas anteriores" description="Resumo das últimas entregas concluídas." /><section className="mt-5 border bg-white"><ul className="divide-y">{driverHistory.map((route) => <li key={route.id}><Link href="/rotas/rota-norte" className="group flex min-h-28 items-center gap-4 p-4"><span className="grid size-11 shrink-0 place-items-center bg-primary-soft text-primary"><Route aria-hidden="true" className="size-5" /></span><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><p className="font-medium">{route.name}</p><span className="inline-flex items-center gap-1 text-xs text-success"><Check aria-hidden="true" className="size-3" /> Concluída</span></div><p className="mt-1 text-sm text-muted-foreground">{route.destination}</p><p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground"><CalendarDays aria-hidden="true" className="size-3" /> {route.date} · {route.stops} paradas · {route.status}</p></div><ChevronRight aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" /></Link></li>)}</ul></section></PersonaShell>; }

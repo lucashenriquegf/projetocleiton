@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `idx_vehicles_internal_code` ON `vehicles` (`internal_code`) WHERE "vehicles"."internal_code" IS NOT NULL;

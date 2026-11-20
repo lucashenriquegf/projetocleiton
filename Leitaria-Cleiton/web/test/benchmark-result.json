@@ -1,0 +1,36 @@
+{
+  "graph": {
+    "nodes": 2630,
+    "edges": 7321
+  },
+  "results": [
+    {
+      "algorithm": "Dijkstra",
+      "queries": 42,
+      "coldMs": 90.92,
+      "warmMedianMs": 74.28,
+      "maxCostDifferenceSeconds": 0
+    },
+    {
+      "algorithm": "A*",
+      "queries": 42,
+      "coldMs": 80.27,
+      "warmMedianMs": 55.44,
+      "maxCostDifferenceSeconds": 0
+    },
+    {
+      "algorithm": "A* bidirecional",
+      "queries": 42,
+      "coldMs": 270.39,
+      "warmMedianMs": 261.43,
+      "maxCostDifferenceSeconds": 0
+    },
+    {
+      "algorithm": "Dijkstra bidirecional",
+      "queries": 42,
+      "coldMs": 194.75,
+      "warmMedianMs": 136.13,
+      "maxCostDifferenceSeconds": 0
+    }
+  ]
+}

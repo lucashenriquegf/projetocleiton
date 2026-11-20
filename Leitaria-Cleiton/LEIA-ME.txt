@@ -1,0 +1,15 @@
+LEITARIA CLEITON - PROTOTIPO
+
+1. Abra Iniciar-Prototipo.cmd.
+2. Com a janela aberta, acesse http://localhost:4175 no navegador.
+3. Entre como gestor, abra Planejar rota e calcule o percurso.
+4. O gestor atribui a rota; na visao do motorista, inicie a viagem e registre as coletas.
+
+Os dados sao ficticios e ficam salvos apenas neste navegador.
+Use o mesmo navegador e endereco para mostrar gestor e motorista.
+As coletas so mudam de situacao quando alguem confirma o resultado.
+
+Em outro computador, instale o Node.js 24 LTS antes de iniciar.
+A primeira execucao instala as dependencias e precisa de internet.
+
+Consulte README.md para ver as funcoes, os limites e o roteiro completo.
